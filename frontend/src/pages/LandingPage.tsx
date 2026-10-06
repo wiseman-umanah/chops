@@ -59,7 +59,10 @@ export default function LandingPage() {
               Just Send a Link.
             </motion.h1>
               <motion.p
-              className='text-[17px] sm:text-[20px] text-[#B2B2B2] font-bold my-4'>
+              className='text-[17px] sm:text-[20px] text-[#B2B2B2] font-bold my-4'
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}>
                 No app downloads. No awkward money talk. Create a Chop session, <br /> share the web link on WhatsApp, and let everyone settle their share <br />directly.
               </motion.p>
             {/* CTAs */}
@@ -129,30 +132,51 @@ export default function LandingPage() {
           {/* ── Cards centred, hands absolutely flanking ── */}
           <div className="relative">
 
-            {/* Hand left — absolute, bottom-left, larger */}
-            <div className="hidden md:block absolute bottom-0 left-0 pointer-events-none select-none" style={{ zIndex: 3 }}>
+            {/* Hand left — slides in from the left */}
+            <motion.div
+              className="hidden md:block absolute bottom-0 left-0 pointer-events-none select-none"
+              style={{ zIndex: 3 }}
+              initial={{ opacity: 0, x: -180 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+            >
               <img
                 src={handLeft}
                 alt=""
                 aria-hidden="true"
                 className="w-[260px] lg:w-[320px] xl:w-[380px] object-contain"
               />
-            </div>
+            </motion.div>
 
-            {/* Hand right — absolute, bottom-right, larger */}
-            <div className="hidden md:block absolute bottom-0 right-0 pointer-events-none select-none" style={{ zIndex: 3 }}>
+            {/* Hand right — slides in from the right */}
+            <motion.div
+              className="hidden md:block absolute bottom-0 right-0 pointer-events-none select-none"
+              style={{ zIndex: 3 }}
+              initial={{ opacity: 0, x: 180 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+            >
               <img
                 src={handRight}
                 alt=""
                 aria-hidden="true"
                 className="w-[260px] lg:w-[320px] xl:w-[380px] object-contain"
               />
-            </div>
+            </motion.div>
 
-            {/* Step cards — stacked carousel, always centred */}
-            <div className="relative py-10 pb-16" style={{ zIndex: 4 }}>
+            {/* Step cards — fade + scale in */}
+            <motion.div
+              className="relative py-10 pb-16"
+              style={{ zIndex: 4 }}
+              initial={{ opacity: 0, scale: 0.93, y: 24 }}
+              whileInView={{ opacity: 1, scale: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+            >
               <HowItWorksStack />
-            </div>
+            </motion.div>
 
           </div>
         </div>
