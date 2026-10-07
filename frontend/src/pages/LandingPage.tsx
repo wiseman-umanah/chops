@@ -22,8 +22,8 @@ export default function LandingPage() {
   return (
     <>
       <section id="product" className="max-w-[95%] min-h-screen mx-auto px-4 sm:px-10 flex flex-col justify-center md:justify-between gap-10 md:grid md:grid-rows-[1fr_120px]">
-        <div className="grid grid-cols-1 md:grid-cols-[3fr_2fr] items-center gap-10">
-          <div className='pt-24'>
+        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] items-center gap-10">
+          <div className='pt-5 sm:pt-24'>
             {/* Social proof pill */}
             <motion.div
               className="flex items-center gap-2 flex-wrap"
@@ -123,9 +123,9 @@ export default function LandingPage() {
         <div className="relative py-40" style={{ zIndex: 2 }}>
 
           {/* ── Header ── */}
-          <FadeUp className="max-w-[560px] mx-auto text-center mb-14 px-5 sm:px-10">
+          <FadeUp className="max-w-[500px] mx-auto text-center mb-14 px-5 sm:px-10">
             <h2 className="text-[28px] font-creato sm:text-[36px] md:text-[44px] font-extrabold text-neutral-900 leading-tight tracking-tight">
-              From "who's paying?" to<br />paid in three steps
+              From "who's paying?" to paid in three steps
             </h2>
           </FadeUp>
 
@@ -134,7 +134,7 @@ export default function LandingPage() {
 
             {/* Hand left — slides in from the left */}
             <motion.div
-              className="hidden md:block absolute bottom-0 left-0 pointer-events-none select-none"
+              className="absolute bottom-0 left-0 pointer-events-none select-none"
               style={{ zIndex: 3 }}
               initial={{ opacity: 0, x: -180 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -151,7 +151,7 @@ export default function LandingPage() {
 
             {/* Hand right — slides in from the right */}
             <motion.div
-              className="hidden md:block absolute bottom-0 right-0 pointer-events-none select-none"
+              className="absolute bottom-0 right-0 pointer-events-none select-none"
               style={{ zIndex: 3 }}
               initial={{ opacity: 0, x: 180 }}
               whileInView={{ opacity: 1, x: 0 }}

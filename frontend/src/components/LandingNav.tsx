@@ -69,7 +69,7 @@ export default function LandingNav() {
         </Link>
 
         {/* Nav links */}
-        <div className="hidden md:flex bg-black px-15 py-5 rounded-full items-center gap-10 text-[16px] font-regular text-white">
+        <div className="hidden lg:flex bg-black px-15 py-5 rounded-full items-center gap-10 text-[16px] font-regular text-white">
           {NAV_ITEMS.map(({ label, sectionId }) => {
             const isActive = isHome && activeId === sectionId
             return (
@@ -93,14 +93,14 @@ export default function LandingNav() {
         <div className="flex items-center gap-3 shrink-0">
           <Link
             to="/login"
-            className="inline-flex items-center px-6 py-3 rounded-full text-[13px] text-white transition-opacity hover:opacity-90"
+            className="hidden sm:inline-flex items-center px-6 py-3 rounded-full text-[13px] text-white transition-opacity hover:opacity-90"
             style={{ background: BRAND }}
           >
             Create Session
           </Link>
           <Link
             to="/signup"
-            className="hidden sm:inline-flex flex items-center px-5 py-3 rounded-full text-[13px] transition-colors hover:bg-neutral-50"
+            className="inline-flex flex items-center px-5 py-3 rounded-full text-[13px] transition-colors hover:bg-neutral-50"
             style={{ border: `1px solid #E5E5E5`, color: 'black' }}
           >
             <RemixIcon name="ri-link" />

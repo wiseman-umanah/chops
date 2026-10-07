@@ -49,7 +49,13 @@ export default function HowItWorksStack() {
   }, [])
 
   return (
-    <div className="relative mx-auto" style={{ width: 413, height: 458 }}>
+    <div
+      className="relative mx-auto"
+      style={{
+        width: 'min(413px, 90vw)',
+        height: 'min(458px, calc(90vw * 458 / 413))',
+      }}
+    >
       {CARDS.map((card, i) => {
         const isActive = i === activeIdx
         // Cards behind the active one get progressively lower z-index

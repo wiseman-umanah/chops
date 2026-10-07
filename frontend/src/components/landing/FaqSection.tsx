@@ -28,7 +28,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
   return (
     <motion.div
       layout
-      className="border border-black bg-white overflow-hidden py-8 px-10"
+      className="border border-black bg-white overflow-hidden py-5 px-5 sm:py-8 sm:px-10"
       style={{ borderRadius: open ? 24 : 9999 }}
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
     >
@@ -37,7 +37,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
       >
-        <span className="text-[15px] font-medium text-neutral-900">{q}</span>
+        <span className="text-[clamp(13px,3.5vw,15px)] font-medium text-neutral-900">{q}</span>
         <motion.span
           animate={{ rotate: open ? 45 : 0 }}
           transition={{ duration: 0.25 }}

@@ -35,8 +35,8 @@ export default function StepCard({
     <motion.div
       className="absolute top-0 left-1/2 overflow-hidden"
       style={{
-        width: 413,
-        height: 458,
+        width: 'min(413px, 90vw)',
+        height: 'min(458px, calc(90vw * 458 / 413))',
         borderRadius: 18,
         background: bg,
         color,

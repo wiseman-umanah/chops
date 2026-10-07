@@ -14,31 +14,31 @@ export default function LandingFooter() {
     <>
       {/* ── CTA Section — cream bg, orange card with chat bubbles ── */}
       <section className="py-16 px-5 sm:px-10" style={{ background: '#f5f0e8' }}>
-        <div className="max-w-[860px] mx-auto relative">
+        {/* Extra horizontal room for the bubbles only on md+ */}
+        <div className="max-w-[860px] mx-auto relative md:px-10">
           {/* Orange card */}
           <div
-            className="relative rounded-3xl px-8 py-14 flex flex-col items-center justify-center text-center overflow-visible"
+            className="relative rounded-3xl px-6 sm:px-8 py-12 sm:py-14 flex flex-col items-center justify-center text-center overflow-hidden sm:overflow-visible"
             style={{ background: '#FF6900', minHeight: 220 }}
           >
-            <h2 className="font-creato font-extrabold text-white text-[24px] sm:text-[32px] md:text-[38px] leading-tight tracking-tight mb-8 max-w-[420px]">
+            <h2 className="font-creato font-extrabold text-white text-[clamp(20px,5.5vw,38px)] leading-tight tracking-tight mb-6 sm:mb-8 max-w-[420px]">
               Ready to stop chasing money in group chats?
             </h2>
 
             <Link
               to="/signup"
-              className="inline-flex items-center gap-1.5 px-7 py-3.5 rounded-full text-[14px] font-bold bg-white transition-opacity hover:opacity-90"
+              className="inline-flex items-center gap-1.5 px-6 sm:px-7 py-3 sm:py-3.5 rounded-full text-[clamp(12px,3.5vw,14px)] font-bold bg-white transition-opacity hover:opacity-90"
               style={{ color: '#1a1a1a' }}
             >
               Create your first CHOP
               <span className="text-[16px] leading-none">›</span>
             </Link>
 
-            {/* Chat bubble — top right: 100px 40px 0px 100px, tail = bottom-right */}
+            {/* Chat bubble — top right (hidden on small, visible sm+) */}
             <div
-              className="absolute"
+              className="hidden sm:block absolute"
               style={{
                 top: 20, right: -24,
-                // width: 244, height: 64,
                 background: '#66B36F',
                 border: '1px solid black',
                 borderRadius: '999px 999px 0px 999px',
@@ -49,12 +49,11 @@ export default function LandingFooter() {
               <p className='absolute right-2 bottom-0' style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, margin: '2px 0 0 0', textAlign: 'right' }}>08:00 PM</p>
             </div>
 
-            {/* Chat bubble — bottom left: same shape, rotate(-180deg) flips the tail to bottom-left */}
+            {/* Chat bubble — bottom left (hidden on small, visible sm+) */}
             <div
-              className="absolute flex items-center"
+              className="hidden sm:flex absolute items-center"
               style={{
                 bottom: 20, left: -24,
-                // width: 187, height: 64,
                 background: '#66B36F',
                 border: '1px solid black',
                 borderRadius: '999px 0px 999px 999px',

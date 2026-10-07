@@ -69,7 +69,7 @@ export default function ChopModesSection() {
 
         {/* Content grid */}
         <div
-          className="relative max-w-[95%] mx-auto grid grid-cols-[3fr_2fr] md:grid-cols-2 pt-14 md:pt-20"
+          className="relative max-w-[95%] mx-auto grid md:grid-cols-2 pt-14 md:pt-20"
           style={{ zIndex: 1 }}
         >
           {/* ── Left ── */}
@@ -114,14 +114,14 @@ export default function ChopModesSection() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                  className="rounded-2xl p-6"
+                  className="rounded-2xl p-5 sm:p-6"
                   style={{ border: '1.5px solid #7BF1A8' }}
                 >
-                  <p className="font-creato font-extrabold text-[20px] mb-3" style={{ color: '#7BF1A8' }}>
+                  <p className="font-creato font-extrabold text-[clamp(16px,4.5vw,20px)] mb-2 sm:mb-3" style={{ color: '#7BF1A8' }}>
                     {active.title}
                   </p>
-                  <p className="text-white text-[14px] leading-relaxed mb-3">{active.body}</p>
-                  <p className="text-[13px]" style={{ color: '#7BF1A8' }}>{active.bestFor}</p>
+                  <p className="text-white text-[clamp(13px,3.5vw,14px)] leading-relaxed mb-2 sm:mb-3">{active.body}</p>
+                  <p className="text-[clamp(12px,3vw,13px)]" style={{ color: '#7BF1A8' }}>{active.bestFor}</p>
                 </motion.div>
               </AnimatePresence>
             </FadeUp>
@@ -129,12 +129,17 @@ export default function ChopModesSection() {
 
           {/* ── Right: phone, bottom-anchored, crops at bottom ── */}
           <FadeUp delay={0.1} className="flex justify-center md:justify-end items-end self-end">
-            <div className="relative" style={{ width: 320, height: 560 }}>
+            <div
+              className="relative"
+              style={{
+                width: 'min(320px, 70vw)',
+                height: 'min(560px, calc(70vw * 560 / 320))',
+              }}
+            >
               <img
                 src={phoneContent}
                 alt="Chop session screen"
                 className="absolute object-contain -bottom-5"
-                // style={{ top: '1.5%', left: '5.5%', right: '5.5%', bottom: '1%', borderRadius: '9.5%', zIndex: 1 }}
               />
               <img
                 src={phoneFrame}
