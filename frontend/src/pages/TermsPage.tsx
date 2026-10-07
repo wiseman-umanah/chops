@@ -1,8 +1,7 @@
 import { motion } from 'framer-motion'
-import React from 'react'
 
-const LAST_UPDATED = 'June 2025'
-const SUPPORT_EMAIL = 'support@usechop.co'
+const LAST_UPDATED = 'October 2026'
+const SUPPORT_EMAIL = 'support@chop.pxxl.click'
 
 const SECTIONS = [
   {
