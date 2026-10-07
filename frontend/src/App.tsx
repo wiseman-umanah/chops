@@ -1,26 +1,77 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import LandingPage from './pages/LandingPage.tsx'
-import TermsPage from './pages/TermsPage.tsx'
-import PrivacyPage from './pages/PrivacyPage.tsx'
-import LandingNav from './components/LandingNav.tsx'
-import LandingFooter from './components/landing/LandingFooter.tsx'
 
-export default function App() {
+import { AuthProvider } from './contexts/AuthContext'
+import ProtectedRoute from './components/ProtectedRoute'
+
+import LandingNav from './components/LandingNav'
+import LandingFooter from './components/landing/LandingFooter'
+import LandingPage from './pages/LandingPage'
+import TermsPage from './pages/TermsPage'
+import PrivacyPage from './pages/PrivacyPage'
+
+import AuthPage from './pages/auth/AuthPage'
+
+import DashboardLayout from './layouts/DashboardLayout'
+import OverviewPage from './pages/dashboard/OverviewPage'
+import ChopFoodPage from './pages/dashboard/ChopFoodPage'
+import ShareLinkPage from './pages/dashboard/ShareLinkPage'
+
+import PublicLayout from './layouts/PublicLayout'
+import SessionPayPage from './pages/session/SessionPayPage'
+import PaymentSuccessPage from './pages/session/PaymentSuccessPage'
+import ChopInPage from './pages/dashboard/ChopInPage'
+
+// Landing shell — nav + footer wrapping public pages
+function LandingShell() {
   const location = useLocation()
   return (
-    <AnimatePresence mode="wait">
-      <div
-        className="min-h-screen bg-white flex flex-col"
-      >
-        <LandingNav />
+    <div className="min-h-screen bg-white flex flex-col">
+      <LandingNav />
+      <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<LandingPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
         </Routes>
-        <LandingFooter />
-      </div>
-    </AnimatePresence>
+      </AnimatePresence>
+      <LandingFooter />
+    </div>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Routes>
+        {/* Auth — no nav/footer */}
+        <Route path="/login"  element={<AuthPage />} />
+        <Route path="/signup" element={<AuthPage />} />
+
+        {/* Dashboard — protected */}
+        <Route
+          path="/dashboard/*"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index             element={<OverviewPage />} />
+          <Route path="chop-food" element={<ChopFoodPage />} />
+          <Route path="chop-in" element={<ChopInPage />} />
+          <Route path="share"     element={<ShareLinkPage />} />
+        </Route>
+
+        {/* Public session pages — Topbar only, no auth required */}
+        <Route element={<PublicLayout />}>
+          <Route path="/s/:slug"        element={<SessionPayPage />} />
+          <Route path="/payment-success" element={<PaymentSuccessPage />} />
+        </Route>
+
+        {/* Landing + public pages */}
+        <Route path="/*" element={<LandingShell />} />
+      </Routes>
+    </AuthProvider>
   )
 }
