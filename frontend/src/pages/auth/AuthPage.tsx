@@ -185,7 +185,7 @@ function LoginForm() {
     setError('')
     setLoading(true)
     try {
-      await signIn('google', { redirectTo: window.location.origin + '/login' })
+      await signIn('google', { redirectTo: window.location.origin + '/dashboard' })
     } catch (err) {
       console.error('Google sign-in error:', err)
       setError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.')
@@ -273,7 +273,7 @@ function SignupForm() {
     setError('')
     setLoading(true)
     try {
-      await signIn('google', { redirectTo: window.location.origin + '/login' })
+      await signIn('google', { redirectTo: window.location.origin + '/dashboard' })
     } catch (err) {
       console.error('Google sign-in error:', err)
       setError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.')
