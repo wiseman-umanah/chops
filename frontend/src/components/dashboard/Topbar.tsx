@@ -5,7 +5,6 @@ import { useQuery } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import RemixIcon from '@/components/RemixIcon'
 import Logo from '@/components/Logo'
-import profileImg from '../../../asset/images/profile.png'
 
 export default function Topbar() {
   const navigate = useNavigate()
@@ -99,11 +98,20 @@ function ProfileDropdown() {
         className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 transition-all duration-150"
         style={{ borderColor: open ? '#FF6900' : '#e5e7eb' }}
       >
-        <img
-          src={profileImg}
-          alt={user ? `${user.firstName} ${user.lastName ?? ''}` : 'Profile'}
-          className="w-full h-full object-cover"
-        />
+        {user?.imageUrl ? (
+          <img
+            src={user.imageUrl}
+            alt={`${user.firstName} ${user.lastName ?? ''}`}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center text-[13px] font-bold text-white"
+            style={{ background: '#FF6900' }}
+          >
+            {initials}
+          </div>
+        )}
       </button>
 
       {/* Dropdown panel */}
@@ -135,6 +143,13 @@ function ProfileDropdown() {
 
           {/* Actions */}
           <div className="py-1">
+            <button
+              onClick={() => { setOpen(false); navigate('/dashboard/settings') }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+            >
+              <RemixIcon name="ri-settings-3-line" size={16} color="#6b7280" />
+              Settings
+            </button>
             <button
               id="sign-out-btn"
               onClick={handleLogout}

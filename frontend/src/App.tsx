@@ -12,6 +12,8 @@ import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
 
 import AuthPage from './pages/auth/AuthPage'
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
+import ResetPasswordPage from './pages/auth/ResetPasswordPage'
 
 import DashboardLayout from './layouts/DashboardLayout'
 import OverviewPage from './pages/dashboard/OverviewPage'
@@ -26,6 +28,7 @@ import ChopInPage from './pages/dashboard/ChopInPage'
 import ChopBillPage from './pages/dashboard/ChopBillPage'
 import NotificationsPage from './pages/dashboard/NotificationsPage'
 import WalletPage from './pages/dashboard/WalletPage'
+import SettingsPage from './pages/dashboard/SettingsPage'
 
 // Landing shell — nav + footer wrapping public pages
 function LandingShell() {
@@ -58,8 +61,10 @@ export default function App() {
     <AuthProvider>
       <Routes>
         {/* Auth — no nav/footer */}
-        <Route path="/login"  element={<AuthRoute />} />
-        <Route path="/signup" element={<AuthRoute />} />
+        <Route path="/login"           element={<AuthRoute />} />
+        <Route path="/signup"          element={<AuthRoute />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password"  element={<ResetPasswordPage />} />
 
         {/* Dashboard — protected */}
         <Route
@@ -77,6 +82,7 @@ export default function App() {
           <Route path="share"            element={<ShareLinkPage />} />
           <Route path="notifications"    element={<NotificationsPage />} />
           <Route path="wallet"           element={<WalletPage />} />
+          <Route path="settings"         element={<SettingsPage />} />
         </Route>
 
         {/* Public session pages — Topbar only, no auth required */}

@@ -204,21 +204,28 @@ function LoginForm() {
         onChange={setEmail}
         required
       />
-      <Field
-        label="Password"
-        id="login-password"
-        type={showPw ? 'text' : 'password'}
-        placeholder="••••••"
-        value={password}
-        onChange={setPassword}
-        required
-        suffix={
-          <button type="button" onClick={() => setShowPw(v => !v)}
-            aria-label={showPw ? 'Hide password' : 'Show password'}>
-            <i className={`ri-${showPw ? 'eye-off' : 'eye'}-line text-[18px]`} />
-          </button>
-        }
-      />
+      <div className="flex flex-col gap-1">
+        <Field
+          label="Password"
+          id="login-password"
+          type={showPw ? 'text' : 'password'}
+          placeholder="••••••"
+          value={password}
+          onChange={setPassword}
+          required
+          suffix={
+            <button type="button" onClick={() => setShowPw(v => !v)}
+              aria-label={showPw ? 'Hide password' : 'Show password'}>
+              <i className={`ri-${showPw ? 'eye-off' : 'eye'}-line text-[18px]`} />
+            </button>
+          }
+        />
+        <div className="flex justify-end pr-1 pt-0.5">
+          <Link to="/forgot-password" className="text-[12px] text-neutral-400 hover:text-[#FF6900] transition-colors">
+            Forgot password?
+          </Link>
+        </div>
+      </div>
       {error && <p className="text-[13px] text-red-500">{error}</p>}
       <BottomActions loading={loading} label="Enter Chop" onGoogle={handleGoogle} />
     </form>
