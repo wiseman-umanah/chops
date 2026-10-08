@@ -121,21 +121,41 @@ export default defineSchema({
    * Payout requests — when an organizer finalizes a completed chop.
    *
    * status:
-   *   pending   — submitted, not yet processed
-   *   processed — payment sent (demo: immediately on creation)
+   *   pending    — destination registered, payout API call in flight
+   *   processing — Bachs accepted the payout (payout.created webhook)
+   *   completed  — money delivered to bank (payout.paid webhook)
+   *   failed     — Bachs could not deliver (payout.failed webhook)
    */
   payouts: defineTable({
     sessionId: v.id("sessions"),
     organizerId: v.string(),
     /** Total amount to be paid out in kobo */
     amountKobo: v.number(),
+    /** Auto-resolved by Bachs from account_number + bank_code — never user-typed */
     recipientName: v.string(),
     accountNumber: v.string(),
+    /** Human-readable bank name, e.g. "Guaranty Trust Bank" */
     bankName: v.string(),
-    status: v.union(v.literal("pending"), v.literal("processed")),
-    /** Demo reference */
+    /** Bachs bank code, e.g. "058" — optional for legacy rows created before this field existed */
+    bankCode: v.optional(v.string()),
+    /** Bachs payout destination ID (pd_...) — stored for reuse */
+    destinationId: v.optional(v.string()),
+    /** Bachs payout ID (pay_...) — used to match payout webhooks */
+    bachsPayoutId: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed"),
+      /** Legacy status from demo stub — treated as completed in UI */
+      v.literal("processed")
+    ),
+    /** Internal idempotency reference */
     reference: v.string(),
+    /** Populated on payout.failed */
+    failureReason: v.optional(v.string()),
   })
     .index("by_organizer", ["organizerId"])
-    .index("by_session", ["sessionId"]),
+    .index("by_session", ["sessionId"])
+    .index("by_bachs_payout", ["bachsPayoutId"]),
 });

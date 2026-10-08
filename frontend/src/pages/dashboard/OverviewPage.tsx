@@ -3,23 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Seo } from '@/hooks/useSeo'
 import { useAuth } from '@/contexts/AuthContext'
 import RemixIcon from '@/components/RemixIcon'
-import { useQuery, useMutation } from 'convex/react'
+import { useQuery, useAction, useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { Id } from '../../../../convex/_generated/dataModel'
 
 const BRAND = '#FF6900'
 
 type StatusFilter = 'all' | 'active' | 'closed' | 'inactive'
-
-const NIGERIAN_BANKS = [
-  'Access Bank', 'Citibank', 'EcoBank', 'Fidelity Bank', 'First Bank',
-  'First City Monument Bank (FCMB)', 'Globus Bank', 'Guaranty Trust Bank (GTB)',
-  'Heritage Bank', 'Keystone Bank', 'Kuda Bank', 'Moniepoint',
-  'OPay', 'Palmpay', 'Polaris Bank', 'Providus Bank', 'Stanbic IBTC',
-  'Standard Chartered', 'Sterling Bank', 'Titan Trust Bank', 'Union Bank',
-  'United Bank for Africa (UBA)', 'Unity Bank', 'Wema Bank', 'Zenith Bank',
-]
 
 function formatNaira(kobo: number) {
   return `₦${Math.round(kobo / 100).toLocaleString('en-NG')}`
@@ -63,33 +54,78 @@ interface FinalizeModalProps {
 }
 
 function FinalizeModal({ session, onClose }: FinalizeModalProps) {
-  const requestPayout = useMutation(api.payouts.requestPayout)
+  const listBanks     = useAction(api.payouts.listBanks)
+  const resolveAcct   = useAction(api.payouts.resolveAccount)
+  const requestPayout = useAction(api.payouts.requestPayout)
 
-  const [recipientName,  setRecipientName]  = useState('')
+  // Bank search
+  const [banks,        setBanks]        = useState<{ name: string; code: string }[]>([])
+  const [banksLoading, setBanksLoading] = useState(true)
+  const [bankSearch,   setBankSearch]   = useState('')
+  const [selectedBank, setSelectedBank] = useState<{ name: string; code: string } | null>(null)
+  const [bankOpen,     setBankOpen]     = useState(false)
+  const bankRef = useRef<HTMLDivElement>(null)
+
+  // Account number + resolve
   const [accountNumber,  setAccountNumber]  = useState('')
-  const [bankName,       setBankName]       = useState('')
-  const [loading,        setLoading]        = useState(false)
-  const [error,          setError]          = useState<string | null>(null)
-  const [done,           setDone]           = useState(false)
+  const [resolvedName,   setResolvedName]   = useState<string | null>(null)
+  const [resolving,      setResolving]      = useState(false)
+  const [resolveError,   setResolveError]   = useState<string | null>(null)
+
+  // Submit
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
+  const [done,     setDone]     = useState(false)
+  const [doneInfo, setDoneInfo] = useState<{ resolvedName: string } | null>(null)
+
+  // Load bank list on mount
+  useEffect(() => {
+    listBanks().then(setBanks).catch(() => setBanks([])).finally(() => setBanksLoading(false))
+  }, [])
+
+  // Close bank dropdown on outside click
+  useEffect(() => {
+    function h(e: MouseEvent) {
+      if (bankRef.current && !bankRef.current.contains(e.target as Node)) setBankOpen(false)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  // Auto-resolve when 10 digits + bank selected
+  useEffect(() => {
+    if (accountNumber.length !== 10 || !selectedBank) {
+      setResolvedName(null)
+      setResolveError(null)
+      return
+    }
+    setResolving(true)
+    setResolvedName(null)
+    setResolveError(null)
+    resolveAcct({ accountNumber, bankCode: selectedBank.code })
+      .then(({ accountName }) => setResolvedName(accountName))
+      .catch(e => setResolveError(e instanceof Error ? e.message : 'Could not verify account'))
+      .finally(() => setResolving(false))
+  }, [accountNumber, selectedBank?.code])
+
+  const filteredBanks = bankSearch
+    ? banks.filter(b => b.name.toLowerCase().includes(bankSearch.toLowerCase()))
+    : banks
+
+  const canSubmit = !!selectedBank && accountNumber.length === 10 && !!resolvedName && !resolving
 
   async function handlePayout() {
-    if (!recipientName.trim() || !accountNumber.trim() || !bankName) {
-      setError('Please fill in all fields.')
-      return
-    }
-    if (!/^\d{10}$/.test(accountNumber)) {
-      setError('Account number must be exactly 10 digits.')
-      return
-    }
+    if (!canSubmit || !selectedBank) return
     setError(null)
     setLoading(true)
     try {
-      await requestPayout({
+      const result = await requestPayout({
         sessionId: session._id,
-        recipientName: recipientName.trim(),
-        accountNumber: accountNumber.trim(),
-        bankName,
+        accountNumber,
+        bankCode: selectedBank.code,
+        bankName: selectedBank.name,
       })
+      setDoneInfo({ resolvedName: result.resolvedName })
       setDone(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Payout failed')
@@ -117,10 +153,13 @@ function FinalizeModal({ session, onClose }: FinalizeModalProps) {
               style={{ background: '#dcfce7' }}>
               <RemixIcon name="ri-checkbox-circle-fill" size={28} color="#16a34a" />
             </div>
-            <p className="text-[18px] font-extrabold text-neutral-900 mb-1">Payout submitted!</p>
-            <p className="text-[13px] text-neutral-500 mb-6">
-              Your payout of {formatNaira(session.paidAmount)} is being processed to {bankName}.
+            <p className="text-[18px] font-extrabold text-neutral-900 mb-1">Payout initiated!</p>
+            <p className="text-[13px] text-neutral-500 mb-2">
+              {formatNaira(session.paidAmount)} is on its way to:
             </p>
+            <p className="text-[15px] font-bold text-neutral-900 mb-0.5">{doneInfo?.resolvedName}</p>
+            <p className="text-[13px] text-neutral-400 mb-6">{selectedBank?.name} · ••••{accountNumber.slice(-4)}</p>
+            <p className="text-[12px] text-neutral-400 mb-6">You'll get a notification when it lands in your account.</p>
             <button
               onClick={onClose}
               className="w-full py-3.5 rounded-full text-[14px] font-bold text-white"
@@ -142,6 +181,7 @@ function FinalizeModal({ session, onClose }: FinalizeModalProps) {
               </button>
             </div>
 
+            {/* Amount */}
             <div className="rounded-2xl px-5 py-3 mb-5 flex justify-between items-center"
               style={{ background: '#fff7ed' }}>
               <span className="text-[13px] text-neutral-500">Amount to receive</span>
@@ -151,61 +191,96 @@ function FinalizeModal({ session, onClose }: FinalizeModalProps) {
             </div>
 
             <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-[12px] font-semibold text-neutral-500 mb-1.5 block">
-                  Account Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="Full name on account"
-                  value={recipientName}
-                  onChange={e => setRecipientName(e.target.value)}
-                  className="w-full border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] outline-none focus:border-[#FF6900] transition-colors"
-                />
+              {/* Bank searchable dropdown */}
+              <div ref={bankRef}>
+                <label className="text-[12px] font-semibold text-neutral-500 mb-1.5 block">Bank</label>
+                <button
+                  type="button"
+                  onClick={() => setBankOpen(v => !v)}
+                  className="w-full flex items-center justify-between border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] bg-white transition-colors hover:border-neutral-300"
+                  style={{ borderColor: bankOpen ? '#FF6900' : '' }}
+                >
+                  <span className={selectedBank ? 'text-neutral-800' : 'text-neutral-400'}>
+                    {selectedBank?.name ?? (banksLoading ? 'Loading banks…' : 'Select bank…')}
+                  </span>
+                  <RemixIcon name="ri-arrow-down-s-line" size={16} color="#9ca3af"
+                    style={{ transform: bankOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.15s' }} />
+                </button>
+                {bankOpen && (
+                  <div className="mt-1 border border-neutral-100 rounded-2xl bg-white shadow-lg overflow-hidden z-50 relative">
+                    <div className="p-2 border-b border-neutral-100">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={bankSearch}
+                        onChange={e => setBankSearch(e.target.value)}
+                        placeholder="Search bank…"
+                        className="w-full px-3 py-2 text-[13px] rounded-xl bg-neutral-50 outline-none focus:bg-white border border-transparent focus:border-neutral-200 transition-colors"
+                      />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {filteredBanks.length === 0 ? (
+                        <p className="text-[12px] text-neutral-400 text-center py-4">No banks found</p>
+                      ) : filteredBanks.map(b => (
+                        <button
+                          key={b.code}
+                          type="button"
+                          onClick={() => { setSelectedBank(b); setBankOpen(false); setBankSearch(''); setResolvedName(null) }}
+                          className="w-full flex items-center justify-between px-4 py-2.5 text-[13px] hover:bg-neutral-50 transition-colors"
+                          style={{ color: selectedBank?.code === b.code ? BRAND : '#374151', fontWeight: selectedBank?.code === b.code ? 600 : 400 }}
+                        >
+                          {b.name}
+                          {selectedBank?.code === b.code && <RemixIcon name="ri-check-line" size={13} color={BRAND} />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Account number */}
               <div>
-                <label className="text-[12px] font-semibold text-neutral-500 mb-1.5 block">
-                  Account Number
-                </label>
+                <label className="text-[12px] font-semibold text-neutral-500 mb-1.5 block">Account Number</label>
                 <input
                   type="text"
-                  placeholder="10-digit account number"
+                  inputMode="numeric"
+                  placeholder="10-digit NUBAN"
                   value={accountNumber}
                   maxLength={10}
-                  onChange={e => setAccountNumber(e.target.value.replace(/\D/g, ''))}
+                  onChange={e => { setAccountNumber(e.target.value.replace(/\D/g, '')); setResolvedName(null) }}
                   className="w-full border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] outline-none focus:border-[#FF6900] transition-colors font-mono"
                 />
               </div>
-              <div>
-                <label className="text-[12px] font-semibold text-neutral-500 mb-1.5 block">
-                  Bank
-                </label>
-                <select
-                  value={bankName}
-                  onChange={e => setBankName(e.target.value)}
-                  className="w-full border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] outline-none focus:border-[#FF6900] transition-colors bg-white appearance-none"
-                >
-                  <option value="">Select bank…</option>
-                  {NIGERIAN_BANKS.map(b => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
-              </div>
+
+              {/* Resolved account name */}
+              {resolving && (
+                <div className="flex items-center gap-2 px-1">
+                  <span className="w-3 h-3 rounded-full border-2 border-neutral-300 border-t-[#FF6900] animate-spin" />
+                  <span className="text-[12px] text-neutral-400">Verifying account…</span>
+                </div>
+              )}
+              {resolvedName && !resolving && (
+                <div className="flex items-center gap-2 px-1">
+                  <RemixIcon name="ri-checkbox-circle-fill" size={14} color="#16a34a" />
+                  <span className="text-[13px] font-bold text-neutral-800">{resolvedName}</span>
+                </div>
+              )}
+              {resolveError && !resolving && (
+                <p className="text-[12px] text-red-500 px-1">{resolveError}</p>
+              )}
             </div>
 
             {error && (
-              <p className="mt-3 text-[12px] font-medium px-1" style={{ color: '#dc2626' }}>
-                {error}
-              </p>
+              <p className="mt-3 text-[12px] font-medium px-1" style={{ color: '#dc2626' }}>{error}</p>
             )}
 
             <button
               onClick={handlePayout}
-              disabled={loading}
-              className="mt-5 w-full py-3.5 rounded-full text-[14px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              disabled={loading || !canSubmit}
+              className="mt-5 w-full py-3.5 rounded-full text-[14px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
               style={{ background: BRAND }}
             >
-              {loading ? 'Processing…' : 'Pay Out'}
+              {loading ? 'Sending payout…' : 'Confirm payout'}
             </button>
           </>
         )}

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -439,6 +439,17 @@ export const finalizeSession = mutation({
     if (session.status !== "closed") throw new Error("Session is not in completed state");
 
     await ctx.db.patch(sessionId, { status: "inactive" });
+  },
+});
+
+/** Internal — used by webhook handlers to transition session status. */
+export const setSessionStatus = internalMutation({
+  args: {
+    sessionId: v.id("sessions"),
+    status: v.union(v.literal("active"), v.literal("closed"), v.literal("inactive")),
+  },
+  handler: async (ctx, { sessionId, status }) => {
+    await ctx.db.patch(sessionId, { status });
   },
 });
 

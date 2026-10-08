@@ -1,5 +1,5 @@
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 /**
  * Bachs payment webhook.
@@ -98,16 +98,7 @@ export const bachsWebhook = httpAction(async (_ctx, request) => {
   let payload: {
     id: string;
     type: string;
-    data: {
-      charge_id: string | null;
-      checkout_id: string | null;
-      reference: string | null;
-      status: string;
-      metadata: {
-        participantId?: string;
-        sessionId?: string;
-      };
-    };
+    data: Record<string, unknown>;
   };
 
   try {
@@ -116,35 +107,129 @@ export const bachsWebhook = httpAction(async (_ctx, request) => {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  // ── Only act on collection.succeeded ─────────────────────────────────────
-  if (payload.type !== "collection.succeeded") {
-    // Acknowledge all other event types without acting
+  // ── Route by event type ───────────────────────────────────────────────────
+
+  if (payload.type === "collection.succeeded") {
+    const data = payload.data as {
+      charge_id: string | null;
+      checkout_id: string | null;
+      reference: string | null;
+      status: string;
+      metadata: { participantId?: string; sessionId?: string };
+    };
+
+    const { reference, charge_id, checkout_id, metadata } = data;
+    const { participantId } = metadata ?? {};
+    const paymentRef = reference ?? charge_id ?? checkout_id ?? payload.id;
+
+    if (!participantId) {
+      console.error("Bachs webhook: missing participantId in metadata", { eventId: payload.id });
+      return new Response("Missing participantId in metadata", { status: 400 });
+    }
+
+    try {
+      await _ctx.runMutation(api.participants.updateParticipantStatus, {
+        participantId: participantId as never,
+        paymentRef,
+      });
+    } catch (err) {
+      console.error("Bachs webhook: failed to update participant", err);
+      return new Response("Internal error", { status: 500 });
+    }
+
     return new Response("OK", { status: 200 });
   }
 
-  const { reference, charge_id, checkout_id, metadata } = payload.data;
-  const { participantId } = metadata ?? {};
+  if (payload.type === "payout.paid") {
+    // data.withdrawal_id is the pay_... ID we stored as bachsPayoutId
+    const data = payload.data as { withdrawal_id?: string; id?: string };
+    const bachsPayoutId = data.withdrawal_id ?? data.id ?? "";
 
-  // Use the first non-null reference available as our stored paymentRef
-  const paymentRef = reference ?? charge_id ?? checkout_id ?? payload.id;
+    if (!bachsPayoutId) {
+      console.error("Bachs payout.paid: missing payout ID", payload);
+      return new Response("Missing payout ID", { status: 400 });
+    }
 
-  if (!participantId) {
-    console.error("Bachs webhook: missing participantId in metadata", {
-      eventId: payload.id,
-    });
-    return new Response("Missing participantId in metadata", { status: 400 });
+    try {
+      const payout = await _ctx.runQuery(internal.payouts.findPayoutByBachsId, { bachsPayoutId });
+      if (!payout) {
+        console.warn("Bachs payout.paid: no matching payout row for", bachsPayoutId);
+        return new Response("OK", { status: 200 }); // idempotent
+      }
+
+      // Mark payout completed
+      await _ctx.runMutation(internal.payouts.updatePayoutStatus, {
+        payoutId: payout._id,
+        status: "completed",
+      });
+
+      // Mark session inactive (payout delivered)
+      await _ctx.runMutation(internal.sessions.setSessionStatus, {
+        sessionId: payout.sessionId,
+        status: "inactive",
+      });
+
+      // Notify organizer
+      const naira = Math.round(payout.amountKobo / 100).toLocaleString("en-NG");
+      const masked = "•".repeat(payout.accountNumber.length - 4) + payout.accountNumber.slice(-4);
+      await _ctx.runMutation(internal.notifications.insertSystemNotification, {
+        userId: payout.organizerId,
+        type: "session_closed",
+        title: `₦${naira} delivered to your bank`,
+        body: `Your payout to ${payout.bankName} (${masked}) has landed.`,
+        sessionId: payout.sessionId,
+      });
+    } catch (err) {
+      console.error("Bachs payout.paid: handler error", err);
+      return new Response("Internal error", { status: 500 });
+    }
+
+    return new Response("OK", { status: 200 });
   }
 
-  // ── Flip participant to paid ──────────────────────────────────────────────
-  try {
-    await _ctx.runMutation(api.participants.updateParticipantStatus, {
-      participantId: participantId as never,
-      paymentRef,
-    });
-  } catch (err) {
-    console.error("Bachs webhook: failed to update participant", err);
-    return new Response("Internal error", { status: 500 });
+  if (payload.type === "payout.failed") {
+    const data = payload.data as {
+      withdrawal_id?: string;
+      id?: string;
+      failure_reason?: string;
+    };
+    const bachsPayoutId = data.withdrawal_id ?? data.id ?? "";
+    const failureReason = data.failure_reason ?? "Unknown reason";
+
+    if (!bachsPayoutId) {
+      console.error("Bachs payout.failed: missing payout ID", payload);
+      return new Response("Missing payout ID", { status: 400 });
+    }
+
+    try {
+      const payout = await _ctx.runQuery(internal.payouts.findPayoutByBachsId, { bachsPayoutId });
+      if (!payout) {
+        console.warn("Bachs payout.failed: no matching payout row for", bachsPayoutId);
+        return new Response("OK", { status: 200 });
+      }
+
+      await _ctx.runMutation(internal.payouts.updatePayoutStatus, {
+        payoutId: payout._id,
+        status: "failed",
+        failureReason,
+      });
+
+      // Notify organizer so they can retry
+      await _ctx.runMutation(internal.notifications.insertSystemNotification, {
+        userId: payout.organizerId,
+        type: "session_closed",
+        title: "Payout failed",
+        body: `Your payout to ${payout.bankName} could not be delivered: ${failureReason}. Please try again from your dashboard.`,
+        sessionId: payout.sessionId,
+      });
+    } catch (err) {
+      console.error("Bachs payout.failed: handler error", err);
+      return new Response("Internal error", { status: 500 });
+    }
+
+    return new Response("OK", { status: 200 });
   }
 
+  // All other event types — acknowledge without acting
   return new Response("OK", { status: 200 });
 });

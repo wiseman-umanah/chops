@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 /** Returns all notifications for the current user, newest first. */
@@ -91,5 +91,29 @@ export const insertPaymentNotification = mutation({
         read: false,
       });
     }
+  },
+});
+
+/**
+ * Internal — insert a system notification (payout delivered / failed).
+ * Called by the Bachs webhook handler; does not require auth.
+ */
+export const insertSystemNotification = internalMutation({
+  args: {
+    userId: v.string(),
+    type: v.union(v.literal("payment"), v.literal("session_closed")),
+    title: v.string(),
+    body: v.optional(v.string()),
+    sessionId: v.optional(v.id("sessions")),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("notifications", {
+      userId: args.userId,
+      type: args.type,
+      title: args.title,
+      body: args.body,
+      sessionId: args.sessionId,
+      read: false,
+    });
   },
 });
