@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useQuery, useAction } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import RemixIcon from '@/components/RemixIcon'
+import { Seo } from '@/hooks/useSeo'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -198,8 +199,16 @@ export default function SessionPayPage() {
     }
   }
 
+  const modeLabel = mode === 'chop-in' ? 'Chop In' : mode === 'food' ? 'Chop Food' : 'Chop Bill'
+  const seoDesc   = `${modeLabel} · Pay your share for "${name}" on Chop — no app download needed.`
+
   return (
     <div className="max-w-[640px] mx-auto">
+      <Seo
+        title={`Pay your share — ${name}`}
+        description={seoDesc}
+        path={`/s/${slug}`}
+      />
 
       {/* ── Mode header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 mb-5">

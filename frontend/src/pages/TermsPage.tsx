@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { Seo } from '@/hooks/useSeo'
 
 const LAST_UPDATED = 'October 2026'
 const SUPPORT_EMAIL = 'support@chop.pxxl.click'
@@ -44,7 +45,14 @@ const SECTIONS = [
 
 export default function TermsPage() {
   return (
-    <main className="flex-1 max-w-[760px] mx-auto w-full px-5 sm:px-10 py-16 md:py-24">
+    <>
+      <Seo
+        title="Terms of Service"
+        description="Read the Chop Terms of Service — understand how our group payment platform works, your obligations, and how we protect you."
+        path="/terms"
+        noIndex
+      />
+      <main className="flex-1 max-w-[760px] mx-auto w-full px-5 sm:px-10 py-16 md:py-24">
       {/* Page header — slides down on mount */}
       <motion.div
         initial={{ opacity: 0, y: -24 }}
@@ -90,6 +98,7 @@ export default function TermsPage() {
           </p>
         </motion.div>
       </div>
-    </main>
+      </main>
+    </>
   )
 }

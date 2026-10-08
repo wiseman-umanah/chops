@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Seo } from '@/hooks/useSeo'
 import { useAuth } from '@/contexts/AuthContext'
 import RemixIcon from '@/components/RemixIcon'
 import { useQuery, useMutation } from 'convex/react'
@@ -299,6 +300,7 @@ export default function OverviewPage() {
 
   return (
     <div>
+      <Seo title="Dashboard" path="/dashboard" noIndex />
       {/* Greeting */}
       <div className="mb-12">
         <h1 className="text-[28px] sm:text-[40px] font-extrabold leading-tight">

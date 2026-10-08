@@ -1,4 +1,5 @@
 import RemixIcon from '@/components/RemixIcon'
+import { Seo } from '@/hooks/useSeo'
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useMutation } from 'convex/react'
@@ -80,6 +81,7 @@ export default function ChopInPage() {
 
   return (
     <div className="w-full">
+      <Seo title="Chop In — Pool funds together" path="/dashboard/chop-in" noIndex />
 
       {/* ── Back navigation ──────────────────────────────────────────────────── */}
       <button

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Seo } from '@/hooks/useSeo'
 import { motion } from 'framer-motion'
 import { useAuthActions } from '@convex-dev/auth/react'
 import { useMutation } from 'convex/react'
@@ -309,6 +310,7 @@ export default function SettingsPage() {
 
   return (
     <>
+      <Seo title="Settings" path="/dashboard/settings" noIndex />
       {/* Circle crop modal */}
       {cropSrc && (
         <CropModal

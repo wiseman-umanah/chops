@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Seo } from '@/hooks/useSeo'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
@@ -60,6 +61,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="max-w-[680px] mx-auto">
+      <Seo title="Notifications" path="/dashboard/notifications" noIndex />
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 mb-6">

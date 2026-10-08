@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Seo } from '@/hooks/useSeo'
 import { motion } from 'framer-motion'
 import Logo from '@/components/Logo'
 import { useAuthActions } from '@convex-dev/auth/react'
@@ -364,6 +365,12 @@ export default function AuthPage() {
 
   return (
     <>
+      <Seo
+        title={tab === 'login' ? 'Sign in to Chop' : 'Create your Chop account'}
+        description="Sign in or create a free Chop account to start splitting bills and pooling funds via WhatsApp."
+        path={tab === 'login' ? '/login' : '/signup'}
+        noIndex
+      />
       <style>{SCROLLBAR_CSS}</style>
       <div className="relative h-screen overflow-hidden" style={{ background: '#009933' }}>
 

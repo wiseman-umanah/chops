@@ -1,8 +1,21 @@
 {
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+  "functions": {
+    "api/og.ts": {
+      "memory": 128,
+      "maxDuration": 10
     }
-  ]
+  },
+  "routes": [
+    {
+      "src": "/s/([A-Za-z0-9-]+)",
+      "dest": "/api/og?slug=$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "env": {
+    "SITE_URL": "https://chop.pxxl.click"
+  }
 }

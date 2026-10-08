@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { Seo } from '@/hooks/useSeo'
 
 const LAST_UPDATED = 'June 2025'
 const SUPPORT_EMAIL = 'support@chop.pxxl.click'
@@ -40,7 +41,14 @@ const SECTIONS = [
 
 export default function PrivacyPage() {
   return (
-    <main className="flex-1 max-w-[760px] mx-auto w-full px-5 sm:px-10 py-16 md:py-24">
+    <>
+      <Seo
+        title="Privacy Policy"
+        description="Read the Chop Privacy Policy — how we collect, use, and protect your data when you use our group payment platform."
+        path="/privacy"
+        noIndex
+      />
+      <main className="flex-1 max-w-[760px] mx-auto w-full px-5 sm:px-10 py-16 md:py-24">
       {/* Page header — slides down on mount */}
       <motion.div
         initial={{ opacity: 0, y: -24 }}
@@ -103,6 +111,7 @@ export default function PrivacyPage() {
           </p>
         </motion.div>
       </div>
-    </main>
+      </main>
+    </>
   )
 }

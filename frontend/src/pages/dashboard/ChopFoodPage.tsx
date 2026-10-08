@@ -1,4 +1,5 @@
 import RemixIcon from '@/components/RemixIcon'
+import { Seo } from '@/hooks/useSeo'
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useMutation } from 'convex/react'
@@ -266,6 +267,7 @@ export default function ChopFoodPage() {
 
   return (
     <div className="w-full">
+      <Seo title="Chop Food — Split a food bill" path="/dashboard/chop-food" noIndex />
 
       {/* ── Back navigation ──────────────────────────────────────────────────── */}
       <button

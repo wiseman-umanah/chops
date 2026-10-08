@@ -3,6 +3,7 @@ import { useQuery } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import Logo from '@/components/Logo'
 import RemixIcon from '@/components/RemixIcon'
+import { Seo } from '@/hooks/useSeo'
 import { useState } from 'react'
 
 const BRAND = '#FF6900'
@@ -93,6 +94,7 @@ export default function ReceiptPage() {
 
   return (
     <div className="min-h-screen bg-white py-8 px-4">
+      <Seo title="Payment receipt" noIndex />
       {/* ── Print styles injected inline ───────────────────────────────────── */}
       <style>{`
         @media print {

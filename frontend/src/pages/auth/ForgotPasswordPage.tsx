@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { useAuthActions } from '@convex-dev/auth/react'
 import Logo from '@/components/Logo'
 import RemixIcon from '@/components/RemixIcon'
+import { Seo } from '@/hooks/useSeo'
 
 const BRAND = '#FF6900'
 
@@ -30,7 +31,9 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white px-4">
+    <>
+      <Seo title="Forgot Password" description="Reset your Chop account password." path="/forgot-password" noIndex />
+      <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -117,6 +120,7 @@ export default function ForgotPasswordPage() {
           </Link>
         </p>
       </motion.div>
-    </div>
+      </div>
+    </>
   )
 }

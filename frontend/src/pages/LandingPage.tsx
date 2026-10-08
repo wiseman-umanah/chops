@@ -1,3 +1,4 @@
+import { Seo } from '@/hooks/useSeo'
 import HowItWorksStack from '@/components/howItWorks/HowItWorksStack'
 import ChopModesSection from '@/components/landing/ChopModesSection'
 import FaqSection from '@/components/landing/FaqSection'
@@ -21,6 +22,7 @@ const AVATARS = [avatar1, avatar2, avatar3]
 export default function LandingPage() {
   return (
     <>
+      <Seo path="/" />
       <section id="product" className="max-w-[95%] min-h-screen mx-auto px-4 sm:px-10 flex flex-col justify-center md:justify-between gap-10 md:grid md:grid-rows-[1fr_120px]">
         <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] items-center gap-10">
           <div className='pt-5 sm:pt-24'>

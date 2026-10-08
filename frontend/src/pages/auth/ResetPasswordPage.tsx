@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Seo } from '@/hooks/useSeo'
 import { motion } from 'framer-motion'
 import { useAuthActions } from '@convex-dev/auth/react'
 import Logo from '@/components/Logo'
@@ -98,7 +99,9 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white px-4">
+    <>
+      <Seo title="Reset Password" description="Enter your OTP code and set a new Chop account password." path="/reset-password" noIndex />
+      <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -213,6 +216,7 @@ export default function ResetPasswordPage() {
           </Link>
         </p>
       </motion.div>
-    </div>
+      </div>
+    </>
   )
 }

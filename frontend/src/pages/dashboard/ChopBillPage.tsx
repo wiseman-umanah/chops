@@ -1,4 +1,5 @@
 import RemixIcon from '@/components/RemixIcon'
+import { Seo } from '@/hooks/useSeo'
 import { useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useMutation } from 'convex/react'
@@ -291,6 +292,7 @@ export default function ChopBillPage() {
 
   return (
     <div className="w-full">
+      <Seo title="Chop Bill — Split any bill" path="/dashboard/chop-bill" noIndex />
 
       {/* ── Back navigation ──────────────────────────────────────────────────── */}
       <button

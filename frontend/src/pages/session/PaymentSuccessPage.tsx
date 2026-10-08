@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
 import RemixIcon from '@/components/RemixIcon'
+import { Seo } from '@/hooks/useSeo'
 
 const BRAND = '#FF6900'
 
@@ -141,6 +142,7 @@ export default function PaymentSuccessPage() {
 
   return (
     <div className="max-w-[900px] mx-auto">
+      <Seo title="Payment successful" path="/payment-success" noIndex />
 
       {/* ── Success banner ─────────────────────────────────────────────── */}
       <motion.div
