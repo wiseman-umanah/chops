@@ -1,11 +1,16 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useRef, useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useQuery } from 'convex/react'
+import { api } from '../../../../convex/_generated/api'
 import RemixIcon from '@/components/RemixIcon'
 import Logo from '@/components/Logo'
 import profileImg from '../../../asset/images/profile.png'
 
 export default function Topbar() {
+  const navigate = useNavigate()
+  const unreadCount = useQuery(api.notifications.unreadCount, {})
+
   return (
     <header className="shrink-0 sticky top-0 z-50 py-8">
       {/* Pill container */}
@@ -23,11 +28,27 @@ export default function Topbar() {
         <div className="flex items-center gap-3">
           {/* Notification + wallet pill */}
           <div className="flex items-center gap-1 border border-[#FF6900] rounded-full px-6 py-3">
-            <button aria-label="Notifications" className="text-[#B2B2B2] hover:text-[#FF6900] transition-colors">
+            <button
+              aria-label="Notifications"
+              onClick={() => navigate('/dashboard/notifications')}
+              className="relative text-[#B2B2B2] hover:text-[#FF6900] transition-colors"
+            >
               <RemixIcon name="ri-notification-3-fill" />
+              {!!unreadCount && unreadCount > 0 && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white px-1"
+                  style={{ background: '#FF6900' }}
+                >
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
             <span className="w-px h-4 bg-neutral-200 mx-1" />
-            <button aria-label="Account" className="text-[#B2B2B2] hover:text-[#FF6900] transition-colors">
+            <button
+              aria-label="Wallet"
+              onClick={() => navigate('/dashboard/wallet')}
+              className="text-[#B2B2B2] hover:text-[#FF6900] transition-colors"
+            >
               <RemixIcon name="ri-wallet-3-fill" />
             </button>
           </div>

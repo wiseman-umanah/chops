@@ -424,6 +424,25 @@ export const closeSession = mutation({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// finalizeSession — called after payout is confirmed; marks session inactive
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const finalizeSession = mutation({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, { sessionId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const session = await ctx.db.get(sessionId);
+    if (!session) throw new Error("Session not found");
+    if (session.organizerId !== userId) throw new Error("Not your session");
+    if (session.status !== "closed") throw new Error("Session is not in completed state");
+
+    await ctx.db.patch(sessionId, { status: "inactive" });
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // getSessionBySlug — public (no auth required)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -453,7 +472,9 @@ export const getSessionBySlug = query({
 export const getOrganizerSessions = query({
   args: {
     /** Filter by status. Omit to get all. */
-    status: v.optional(v.union(v.literal("active"), v.literal("closed"))),
+    status: v.optional(
+      v.union(v.literal("active"), v.literal("closed"), v.literal("inactive"))
+    ),
   },
   handler: async (ctx, { status }) => {
     const userId = await getAuthUserId(ctx);

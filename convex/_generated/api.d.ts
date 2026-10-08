@@ -11,7 +11,9 @@
 import type * as auth from "../auth.js";
 import type * as http from "../http.js";
 import type * as http_actions from "../http_actions.js";
+import type * as notifications from "../notifications.js";
 import type * as participants from "../participants.js";
+import type * as payouts from "../payouts.js";
 import type * as sessions from "../sessions.js";
 import type * as users from "../users.js";
 
@@ -25,7 +27,9 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   http: typeof http;
   http_actions: typeof http_actions;
+  notifications: typeof notifications;
   participants: typeof participants;
+  payouts: typeof payouts;
   sessions: typeof sessions;
   users: typeof users;
 }>;

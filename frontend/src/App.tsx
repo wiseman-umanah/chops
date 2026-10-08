@@ -21,8 +21,11 @@ import ShareLinkPage from './pages/dashboard/ShareLinkPage'
 import PublicLayout from './layouts/PublicLayout'
 import SessionPayPage from './pages/session/SessionPayPage'
 import PaymentSuccessPage from './pages/session/PaymentSuccessPage'
+import ReceiptPage from './pages/session/ReceiptPage'
 import ChopInPage from './pages/dashboard/ChopInPage'
 import ChopBillPage from './pages/dashboard/ChopBillPage'
+import NotificationsPage from './pages/dashboard/NotificationsPage'
+import WalletPage from './pages/dashboard/WalletPage'
 
 // Landing shell — nav + footer wrapping public pages
 function LandingShell() {
@@ -67,18 +70,23 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index             element={<OverviewPage />} />
-          <Route path="chop-food" element={<ChopFoodPage />} />
-          <Route path="chop-in" element={<ChopInPage />} />
-          <Route path="chop-bill" element={<ChopBillPage />} />
-          <Route path="share"     element={<ShareLinkPage />} />
+          <Route index                   element={<OverviewPage />} />
+          <Route path="chop-food"        element={<ChopFoodPage />} />
+          <Route path="chop-in"          element={<ChopInPage />} />
+          <Route path="chop-bill"        element={<ChopBillPage />} />
+          <Route path="share"            element={<ShareLinkPage />} />
+          <Route path="notifications"    element={<NotificationsPage />} />
+          <Route path="wallet"           element={<WalletPage />} />
         </Route>
 
         {/* Public session pages — Topbar only, no auth required */}
         <Route element={<PublicLayout />}>
-          <Route path="/s/:slug"        element={<SessionPayPage />} />
+          <Route path="/s/:slug"         element={<SessionPayPage />} />
           <Route path="/payment-success" element={<PaymentSuccessPage />} />
         </Route>
+
+        {/* Receipt — bare page, no topbar, no nav */}
+        <Route path="/r/:paymentRef" element={<ReceiptPage />} />
 
         {/* Landing + public pages */}
         <Route path="/*" element={<LandingShell />} />
