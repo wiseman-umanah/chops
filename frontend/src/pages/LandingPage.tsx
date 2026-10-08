@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Seo } from '@/hooks/useSeo'
 import HowItWorksStack from '@/components/howItWorks/HowItWorksStack'
 import ChopModesSection from '@/components/landing/ChopModesSection'
@@ -10,8 +11,9 @@ import handRight from '../../asset/images/hand-right.png'
 import s2Layer1  from '../../asset/images/s2-layer1.png'
 import s2Layer2  from '../../asset/images/s2-layer2.png'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import FadeUp from '@/components/FadeUp'
+import JoinSessionModal from '@/components/JoinSessionModal'
 
 /* ── Brand ───────────────────────────────────────────────────────────── */
 const BRAND    = '#FF6900'
@@ -20,6 +22,8 @@ const BRAND    = '#FF6900'
 const AVATARS = [avatar1, avatar2, avatar3]
 
 export default function LandingPage() {
+  const [joinOpen, setJoinOpen] = useState(false)
+
   return (
     <>
       <Seo path="/" />
@@ -81,13 +85,13 @@ export default function LandingPage() {
               >
                 Start a Chop Session
               </Link>
-              <a
-                href="#how-it-works"
-                className="inline-flex items-center px-4 py-2.5 sm:px-5 sm:py-3 rounded-full text-[12px] sm:text-[13px] font-bold transition-colors hover:bg-neutral-50 whitespace-nowrap"
-                style={{ border: `1.5px solid ${BRAND}`, color: BRAND }}
+              <button
+                onClick={() => setJoinOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 sm:px-5 sm:py-3 rounded-full text-[12px] sm:text-[13px] font-bold transition-colors hover:bg-neutral-50 whitespace-nowrap"
+                style={{ border: `1.5px solid #E5E5E5`, color: '#18181b' }}
               >
-                See how it Works
-              </a>
+                Join a Session
+              </button>
             </motion.div>
           </div>
 
@@ -186,6 +190,10 @@ export default function LandingPage() {
 
       <ChopModesSection />
       <FaqSection />
+
+      <AnimatePresence>
+        {joinOpen && <JoinSessionModal onClose={() => setJoinOpen(false)} />}
+      </AnimatePresence>
     </>
   )
 }

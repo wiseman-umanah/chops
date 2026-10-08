@@ -7,6 +7,7 @@ import { useQuery, useAction, useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import { useState, useEffect, useRef } from 'react'
 import type { Id } from '../../../../convex/_generated/dataModel'
+import JoinSessionModal from '@/components/JoinSessionModal'
 
 const BRAND = '#FF6900'
 
@@ -301,6 +302,7 @@ export default function OverviewPage() {
   const [deletingId, setDeletingId]   = useState<Id<'sessions'> | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [finalizeSession, setFinalizeSession] = useState<Session | null>(null)
+  const [joinOpen, setJoinOpen]               = useState(false)
 
   const stats    = useQuery(api.sessions.getSessionStats, {})
   const sessions = useQuery(
@@ -472,8 +474,17 @@ const STATS = [
 		})}
 		</div>
 
-      {/* Quick Actions */}
-      <h2 className="text-[18px] font-bold text-neutral-900 mb-5">Chop Quick Actions</h2>
+      {/* Quick Actions header + Join button */}
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-[18px] font-bold text-neutral-900">Chop Quick Actions</h2>
+        <button
+          onClick={() => setJoinOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-full border border-neutral-200 text-[13px] font-semibold text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 transition-colors"
+        >
+          <RemixIcon name="ri-login-box-line" size={15} color="#6b7280" />
+          Join Session
+        </button>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {QUICK_ACTIONS.map((action, i) => (
           <motion.button
@@ -844,6 +855,13 @@ const STATS = [
             session={finalizeSession}
             onClose={() => setFinalizeSession(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Join session modal */}
+      <AnimatePresence>
+        {joinOpen && (
+          <JoinSessionModal onClose={() => setJoinOpen(false)} />
         )}
       </AnimatePresence>
     </div>

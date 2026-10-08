@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
 import Logo from './Logo'
 import RemixIcon from './RemixIcon'
+import JoinSessionModal from '@/components/JoinSessionModal'
 
 const BRAND = '#FF6900'
 
@@ -19,7 +21,8 @@ export default function LandingNav() {
   const navigate  = useNavigate()
   const isHome    = location.pathname === '/'
 
-  const [activeId, setActiveId] = useState<string>('')
+  const [activeId,  setActiveId]  = useState<string>('')
+  const [joinOpen,  setJoinOpen]  = useState(false)
 
   /* Only observe sections when on the home page */
   useEffect(() => {
@@ -98,17 +101,21 @@ export default function LandingNav() {
           >
             Create Session
           </Link>
-          <Link
-            to="/signup"
-            className="inline-flex flex items-center px-5 py-3 rounded-full text-[13px] transition-colors hover:bg-neutral-50"
+          <button
+            onClick={() => setJoinOpen(true)}
+            className="inline-flex items-center gap-1.5 px-5 py-3 rounded-full text-[13px] transition-colors hover:bg-neutral-50"
             style={{ border: `1px solid #E5E5E5`, color: 'black' }}
           >
-            <RemixIcon name="ri-link" />
+            <RemixIcon name="ri-link" size={15} />
             Join a Session
-          </Link>
+          </button>
         </div>
 
       </div>
+
+      <AnimatePresence>
+        {joinOpen && <JoinSessionModal onClose={() => setJoinOpen(false)} />}
+      </AnimatePresence>
     </nav>
   )
 }
