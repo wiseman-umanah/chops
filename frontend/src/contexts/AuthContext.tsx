@@ -1,60 +1,44 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
+import { useConvexAuth, useQuery } from 'convex/react'
+import { useAuthActions } from '@convex-dev/auth/react'
+import { api } from '../../../convex/_generated/api'
 
 interface User {
   firstName: string
-  lastName: string
-  phone: string
-  email: string
+  lastName?: string
+  phone?: string
+  email?: string
 }
 
 interface AuthContextValue {
   isAuthenticated: boolean
+  isLoading: boolean
   user: User | null
-  login: (phone: string, password: string) => Promise<void>
-  signup: (data: { firstName: string; lastName: string; phone: string; email: string; password: string }) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const stored = localStorage.getItem('chop_user')
-      return stored ? JSON.parse(stored) : null
-    } catch {
-      return null
-    }
-  })
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  const { signOut } = useAuthActions()
 
-  const isAuthenticated = user !== null
+  const profile = useQuery(
+    api.users.getMyProfile,
+    isAuthenticated ? {} : 'skip'
+  )
 
-  async function login(phone: string, _password: string) {
-    // Demo: always succeeds — replace with real API call
-    const mockUser: User = { firstName: 'Alex', lastName: 'Chop', phone, email: '' }
-    localStorage.setItem('chop_user', JSON.stringify(mockUser))
-    setUser(mockUser)
-  }
-
-  async function signup(data: { firstName: string; lastName: string; phone: string; email: string; password: string }) {
-    // Demo: always succeeds — replace with real API call
-    const mockUser: User = {
-      firstName: data.firstName || 'Alex',
-      lastName:  data.lastName  || 'Chop',
-      phone:     data.phone,
-      email:     data.email,
-    }
-    localStorage.setItem('chop_user', JSON.stringify(mockUser))
-    setUser(mockUser)
-  }
-
-  function logout() {
-    localStorage.removeItem('chop_user')
-    setUser(null)
-  }
+  const user: User | null = profile
+    ? {
+        firstName: profile.firstName ?? profile.name ?? 'User',
+        lastName: profile.lastName,
+        phone: profile.phone,
+        email: profile.email,
+      }
+    : null
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, signup, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, logout: signOut }}>
       {children}
     </AuthContext.Provider>
   )

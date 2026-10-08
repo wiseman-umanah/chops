@@ -1,7 +1,8 @@
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 
 import { AuthProvider } from './contexts/AuthContext'
+import { useAuth } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 
 import LandingNav from './components/LandingNav'
@@ -40,13 +41,21 @@ function LandingShell() {
   )
 }
 
+// Redirect authenticated users away from auth pages
+function AuthRoute() {
+  const { isAuthenticated, isLoading } = useAuth()
+  if (isLoading) return null
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />
+  return <AuthPage />
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <Routes>
         {/* Auth — no nav/footer */}
-        <Route path="/login"  element={<AuthPage />} />
-        <Route path="/signup" element={<AuthPage />} />
+        <Route path="/login"  element={<AuthRoute />} />
+        <Route path="/signup" element={<AuthRoute />} />
 
         {/* Dashboard — protected */}
         <Route
