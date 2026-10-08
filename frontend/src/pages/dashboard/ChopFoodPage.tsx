@@ -1,6 +1,9 @@
 import RemixIcon from '@/components/RemixIcon'
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { useMutation } from 'convex/react'
+import { api } from '../../../../convex/_generated/api'
+import type { Id } from '../../../../convex/_generated/dataModel'
 
 const BRAND = '#FF6900'
 
@@ -8,8 +11,22 @@ interface MenuItem {
   id: string
   name: string
   qty: number
+  /** Price per unit in naira (user-entered) */
   price: number
   participant: string
+}
+
+// Shape that OverviewPage passes for edit
+interface EditSession {
+  _id: Id<'sessions'>
+  name: string
+  totalAmount: number
+  taxKobo?: number
+  tipKobo?: number
+  participants: {
+    name: string
+    items?: { name: string; price: number }[]
+  }[]
 }
 
 function uid() {
@@ -20,11 +37,20 @@ function formatNaira(n: number) {
   return `₦${n.toLocaleString('en-NG')}`
 }
 
-// ── Shared input style ────────────────────────────────────────────────────────
 const inputCls =
   'w-full border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:border-[#FF6900] transition-colors bg-white'
 
-// ── Custom participant dropdown ───────────────────────────────────────────────
+function computeFeePerParticipant(totalKobo: number, n: number): number {
+  if (n === 0) return 0
+  let totalFee: number
+  if (totalKobo < 500_000)        totalFee = 10_000
+  else if (totalKobo < 1_000_000) totalFee = 15_000
+  else if (totalKobo < 2_000_000) totalFee = 20_000
+  else if (totalKobo < 5_000_000) totalFee = Math.round(totalKobo * 0.0075)
+  else                             totalFee = Math.round(totalKobo * 0.005)
+  return Math.round(totalFee / n)
+}
+
 function ParticipantSelect({
   value,
   options,
@@ -37,7 +63,6 @@ function ParticipantSelect({
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  // close on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
@@ -48,15 +73,11 @@ function ParticipantSelect({
 
   return (
     <div ref={ref} className="relative w-full">
-      {/* Trigger */}
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between gap-1 border rounded-full px-4 py-2.5 text-[13px] font-medium transition-all bg-white"
-        style={{
-          borderColor: open ? BRAND : '#e5e7eb',
-          color: value !== 'Everyone' ? BRAND : '#374151',
-        }}
+        style={{ borderColor: open ? BRAND : '#e5e7eb', color: value !== 'Everyone' ? BRAND : '#374151' }}
       >
         <span className="truncate">{value}</span>
         <RemixIcon
@@ -68,12 +89,8 @@ function ParticipantSelect({
         />
       </button>
 
-      {/* Dropdown list */}
       {open && (
-        <div
-          className="absolute z-50 mt-1 w-full rounded-2xl border border-neutral-100 bg-white shadow-lg overflow-hidden py-1"
-          style={{ minWidth: 130 }}
-        >
+        <div className="absolute z-50 mt-1 w-full rounded-2xl border border-neutral-100 bg-white shadow-lg overflow-hidden py-1" style={{ minWidth: 130 }}>
           {options.map(opt => {
             const selected = opt === value
             return (
@@ -95,35 +112,73 @@ function ParticipantSelect({
   )
 }
 
+// ── Prefill helpers for edit mode ─────────────────────────────────────────────
+
+function prefillParticipantsRaw(es: EditSession): string {
+  return es.participants.map(p => p.name).join(', ')
+}
+
+function prefillItems(es: EditSession): MenuItem[] {
+  // Flatten all items from all participants; assign participant name to each
+  const result: MenuItem[] = []
+  for (const p of es.participants) {
+    for (const item of p.items ?? []) {
+      result.push({
+        id: uid(),
+        name: item.name,
+        // items are stored as kobo total (qty already baked in) — display as naira per item
+        qty: 1,
+        price: item.price / 100,
+        participant: p.name,
+      })
+    }
+  }
+  return result.length > 0
+    ? result
+    : [{ id: uid(), name: '', qty: 1, price: 0, participant: 'Everyone' }]
+}
+
 export default function ChopFoodPage() {
   const navigate = useNavigate()
+  const location = useLocation()
 
-  const [title, setTitle]           = useState('')
-  const [participantsRaw, setParticipantsRaw] = useState('')
-  const [items, setItems]           = useState<MenuItem[]>([
-    { id: uid(), name: '', qty: 1, price: 0, participant: 'Everyone' },
-  ])
-  const [taxPct, setTaxPct]         = useState('')
-  const [tipPct, setTipPct]         = useState('')
+  const editSession   = (location.state as { editSession?: EditSession } | null)?.editSession ?? null
+  const isEditMode    = editSession !== null
 
-  const participants = useMemo(
-    () => ['Everyone', ...participantsRaw.split(',').map(s => s.trim()).filter(Boolean)],
+  const createSession = useMutation(api.sessions.createSession)
+  const editMutation  = useMutation(api.sessions.editSession)
+
+  // Prefill from editSession if in edit mode
+  const [title, setTitle]                     = useState(isEditMode ? editSession.name : '')
+  const [participantsRaw, setParticipantsRaw] = useState(isEditMode ? prefillParticipantsRaw(editSession) : '')
+  const [items, setItems]                     = useState<MenuItem[]>(
+    isEditMode ? prefillItems(editSession) : [{ id: uid(), name: '', qty: 1, price: 0, participant: 'Everyone' }]
+  )
+  const [taxPct, setTaxPct] = useState(
+    isEditMode && editSession.taxKobo ? String(Math.round((editSession.taxKobo / editSession.totalAmount) * 100)) : ''
+  )
+  const [tipPct, setTipPct] = useState(
+    isEditMode && editSession.tipKobo ? String(Math.round((editSession.tipKobo / editSession.totalAmount) * 100)) : ''
+  )
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState<string | null>(null)
+
+  const namedPeople = useMemo(
+    () => participantsRaw.split(',').map(s => s.trim()).filter(Boolean),
     [participantsRaw]
   )
+  const participants = useMemo(() => ['Everyone', ...namedPeople], [namedPeople])
 
-  // ── Derived breakdown ──────────────────────────────────────────────────────
-  const subtotal = items.reduce((s, it) => s + it.qty * it.price, 0)
-  const tax      = Math.round(subtotal * (parseFloat(taxPct) || 0) / 100)
-  const tip      = Math.round(subtotal * (parseFloat(tipPct) || 0) / 100)
-  const total    = subtotal + tax + tip
-
-  // per-person split (Everyone = divide equally; named = only their items)
-  const namedPeople = participants.filter(p => p !== 'Everyone')
+  const subtotal      = items.reduce((s, it) => s + it.qty * it.price, 0)
+  const tax           = Math.round(subtotal * (parseFloat(taxPct) || 0) / 100)
+  const tip           = Math.round(subtotal * (parseFloat(tipPct) || 0) / 100)
+  const total         = subtotal + tax + tip
+  const totalKobo     = total * 100
+  const feePerParticipantKobo = computeFeePerParticipant(totalKobo, namedPeople.length)
 
   const perPerson = useMemo(() => {
     const totals: Record<string, number> = {}
     namedPeople.forEach(p => { totals[p] = 0 })
-
     items.forEach(it => {
       const lineTotal = it.qty * it.price
       if (it.participant === 'Everyone') {
@@ -133,79 +188,135 @@ export default function ChopFoodPage() {
         totals[it.participant] = (totals[it.participant] ?? 0) + lineTotal
       }
     })
-
-    // apply tax + tip proportionally
     const taxTipFactor = subtotal > 0 ? (tax + tip) / subtotal : 0
     return Object.fromEntries(
-      Object.entries(totals).map(([p, v]) => [p, Math.round(v * (1 + taxTipFactor))])
+      Object.entries(totals).map(([p, v]) => [
+        p,
+        Math.round(v * (1 + taxTipFactor)) + Math.round(feePerParticipantKobo / 100),
+      ])
     )
-  }, [items, namedPeople, tax, tip, subtotal])
+  }, [items, namedPeople, tax, tip, subtotal, feePerParticipantKobo])
 
-  // ── Item helpers ───────────────────────────────────────────────────────────
   function addItem() {
     setItems(prev => [...prev, { id: uid(), name: '', qty: 1, price: 0, participant: 'Everyone' }])
   }
-
   function updateItem(id: string, patch: Partial<MenuItem>) {
     setItems(prev => prev.map(it => it.id === id ? { ...it, ...patch } : it))
   }
-
   function removeItem(id: string) {
     setItems(prev => prev.filter(it => it.id !== id))
   }
 
-  function handleCreate() {
-    // Store a mock session slug and navigate to share page
-    const slug = title.toLowerCase().replace(/\s+/g, '-') + '-' + Math.floor(Math.random() * 100)
-    navigate('/dashboard/share', { state: { slug, title, total, mode: 'food' } })
+  async function handleSubmit() {
+    if (!title.trim()) { setError('Session title is required'); return }
+    if (namedPeople.length === 0) { setError('Add at least one participant'); return }
+
+    const convexParticipants: { name: string; items: { name: string; price: number }[] }[] =
+      namedPeople.map(p => {
+        const myItems: { name: string; price: number }[] = []
+        items.forEach(it => {
+          if (it.participant === p || it.participant === 'Everyone') {
+            myItems.push({ name: it.name || 'Item', price: Math.round(it.price * 100) * it.qty })
+          }
+        })
+        return { name: p, items: myItems }
+      })
+
+    const hasEmptyItems = convexParticipants.some(p => p.items.length === 0)
+    if (hasEmptyItems) { setError('Every participant must have at least one item'); return }
+
+    setError(null)
+    setLoading(true)
+    try {
+      if (isEditMode) {
+        await editMutation({
+          sessionId: editSession._id,
+          name: title.trim(),
+          totalAmount: totalKobo,
+          taxKobo: tax * 100,
+          tipKobo: tip * 100,
+          participants: convexParticipants,
+        })
+        navigate('/dashboard')
+      } else {
+        const result = await createSession({
+          mode: 'food',
+          name: title.trim(),
+          totalAmount: totalKobo,
+          taxKobo: tax * 100,
+          tipKobo: tip * 100,
+          participants: convexParticipants,
+        })
+        navigate('/dashboard/share', {
+          state: { slug: result.slug, title: title.trim(), total: totalKobo, mode: 'food' },
+        })
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Something went wrong'
+      // If payments already exist the server will say so — send user back to overview
+      if (msg.toLowerCase().includes('payment')) {
+        navigate('/dashboard', { state: { notice: msg } })
+      } else {
+        setError(msg)
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <div className="w-full">
+
+      {/* ── Back navigation ──────────────────────────────────────────────────── */}
+      <button
+        onClick={() => navigate('/dashboard')}
+        className="flex items-center gap-1.5 text-[13px] font-semibold text-neutral-500 hover:text-neutral-800 transition-colors mb-6"
+      >
+        <RemixIcon name="ri-arrow-left-line" size={16} />
+        Back to overview
+      </button>
+
       <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-        {/* ── Left column: form — 60% ───────────────────────────────────── */}
+        {/* ── Left column ─────────────────────────────────────────────────── */}
         <div className="w-full lg:w-[60%] min-w-0 flex flex-col gap-4">
 
-          {/* Session title card */}
           <div className="border border-neutral-200 rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-4">
-              <span className="text-[16px]"><RemixIcon name='ri-restaurant-2-fill' size={20} color="#FF6900" /></span>
-              <span className="text-[14px] font-bold text-neutral-700">Chop Food</span>
+              <RemixIcon name='ri-restaurant-2-fill' size={20} color={BRAND} />
+              <span className="text-[14px] font-bold text-neutral-700">
+                {isEditMode ? 'Edit Chop Food' : 'Chop Food'}
+              </span>
             </div>
             <label className="block text-[13px] font-bold text-neutral-800 mb-1.5">Session Title</label>
             <input
               className={inputCls}
-              placeholder="Input text"
+              placeholder="e.g. Team lunch at Chicken Republic"
               value={title}
               onChange={e => setTitle(e.target.value)}
             />
           </div>
 
-          {/* Participants */}
           <div className="border border-neutral-200 rounded-2xl p-6">
             <h3 className="text-[15px] font-bold text-neutral-900 mb-4">Participants</h3>
             <input
               className={inputCls}
-              placeholder="Input text"
+              placeholder="e.g. Tunde, Amaka, Seun"
               value={participantsRaw}
               onChange={e => setParticipantsRaw(e.target.value)}
             />
             <p className="text-[12px] text-neutral-400 mt-2">Separate each participant by a comma</p>
           </div>
 
-          {/* Menu */}
           <div className="border border-neutral-200 rounded-2xl p-6">
             <h3 className="text-[15px] font-bold text-neutral-900 mb-4">Menu</h3>
 
-            {/* Column headers */}
             <div className="grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr 80px 100px 140px 36px' }}>
-              {['Food Name', 'Amount', 'Price', 'Participant', ''].map(h => (
+              {['Food Name', 'Amount', 'Price (₦)', 'Participant', ''].map(h => (
                 <span key={h} className="text-[12px] font-semibold text-neutral-500">{h}</span>
               ))}
             </div>
 
-            {/* Rows */}
             <div className="flex flex-col gap-2">
               {items.map(item => (
                 <div key={item.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: '1fr 80px 100px 140px 36px' }}>
@@ -215,7 +326,6 @@ export default function ChopFoodPage() {
                     value={item.name}
                     onChange={e => updateItem(item.id, { name: e.target.value })}
                   />
-                  {/* Qty stepper */}
                   <div className="flex items-center justify-between border border-neutral-200 rounded-full px-3 py-2 bg-white">
                     <button onClick={() => updateItem(item.id, { qty: Math.max(1, item.qty - 1) })}
                       className="text-neutral-400 hover:text-neutral-700 text-[16px] leading-none w-4">−</button>
@@ -223,7 +333,6 @@ export default function ChopFoodPage() {
                     <button onClick={() => updateItem(item.id, { qty: item.qty + 1 })}
                       className="text-neutral-400 hover:text-neutral-700 text-[16px] leading-none w-4">+</button>
                   </div>
-                  {/* Price */}
                   <div className="flex items-center border border-neutral-200 rounded-full px-3 py-2 bg-white gap-1">
                     <input
                       type="number" min="0"
@@ -235,13 +344,11 @@ export default function ChopFoodPage() {
                     <button onClick={() => updateItem(item.id, { price: Math.max(0, item.price - 100) })}
                       className="text-neutral-400 hover:text-neutral-700 text-[14px] leading-none">−</button>
                   </div>
-                  {/* Participant dropdown */}
                   <ParticipantSelect
                     value={item.participant}
                     options={participants}
                     onChange={v => updateItem(item.id, { participant: v })}
                   />
-                  {/* Delete */}
                   <button
                     onClick={() => removeItem(item.id)}
                     disabled={items.length === 1}
@@ -262,7 +369,6 @@ export default function ChopFoodPage() {
             </button>
           </div>
 
-          {/* Tax & tip */}
           <div className="border border-neutral-200 rounded-2xl p-6">
             <h3 className="text-[15px] font-bold text-neutral-900 mb-4">Tax &amp; tip</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -272,11 +378,8 @@ export default function ChopFoodPage() {
                   className={inputCls}
                   placeholder="e.g. 7"
                   inputMode="numeric"
-                  min="1"
-                  max="100"
                   value={taxPct}
                   onChange={e => {
-                    // strip non-digits, remove leading zeros, clamp 1–100
                     const raw = e.target.value.replace(/\D/g, '').replace(/^0+/, '')
                     const n = parseInt(raw, 10)
                     if (raw === '') { setTaxPct(''); return }
@@ -290,8 +393,6 @@ export default function ChopFoodPage() {
                   className={inputCls}
                   placeholder="e.g. 10"
                   inputMode="numeric"
-                  min="1"
-                  max="100"
                   value={tipPct}
                   onChange={e => {
                     const raw = e.target.value.replace(/\D/g, '').replace(/^0+/, '')
@@ -303,14 +404,19 @@ export default function ChopFoodPage() {
               </div>
             </div>
           </div>
+
+          {error && (
+            <div className="rounded-2xl px-5 py-3 text-[13px] font-medium" style={{ background: '#fff7ed', color: '#9a3412' }}>
+              {error}
+            </div>
+          )}
         </div>
 
-        {/* ── Right column: split breakdown — 40%, sticky ───────────────── */}
+        {/* ── Right column ────────────────────────────────────────────────── */}
         <div className="w-full lg:w-[40%] min-w-0 lg:sticky lg:top-6 shrink-0">
           <div className="rounded-2xl p-7 text-white" style={{ background: BRAND }}>
             <h3 className="text-[18px] font-bold mb-5">Split breakdown</h3>
 
-            {/* Per-person rows */}
             <div className="flex flex-col gap-2 mb-5">
               {namedPeople.length > 0 ? namedPeople.map(p => (
                 <div key={p} className="flex justify-between text-[14px]">
@@ -324,7 +430,6 @@ export default function ChopFoodPage() {
 
             <div className="border-t border-white/30 my-4" />
 
-            {/* Totals */}
             <div className="flex flex-col gap-2 text-[14px] mb-6">
               <div className="flex justify-between">
                 <span className="font-semibold">Subtotal</span>
@@ -338,20 +443,27 @@ export default function ChopFoodPage() {
                 <span className="font-semibold">Tip</span>
                 <span className="font-semibold">{formatNaira(tip)}</span>
               </div>
+              {namedPeople.length > 0 && totalKobo > 0 && (
+                <div className="flex justify-between text-white/70 text-[13px]">
+                  <span>Platform fee / person</span>
+                  <span>{formatNaira(Math.round(feePerParticipantKobo / 100))}</span>
+                </div>
+              )}
               <div className="flex justify-between text-[15px] font-bold mt-1">
                 <span>Total</span>
                 <span>{formatNaira(total)}</span>
               </div>
             </div>
 
-            {/* CTA */}
             <button
-              onClick={handleCreate}
-              disabled={!title.trim()}
+              onClick={handleSubmit}
+              disabled={!title.trim() || loading}
               className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full text-[14px] font-bold bg-white transition-opacity hover:opacity-90 disabled:opacity-40"
               style={{ color: BRAND }}
             >
-              🔗 Create and Generate Link
+              {loading
+                ? (isEditMode ? 'Saving…' : 'Creating…')
+                : (isEditMode ? '💾 Save Edit' : '🔗 Create and Generate Link')}
             </button>
           </div>
         </div>
