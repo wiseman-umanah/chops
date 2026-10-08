@@ -29,6 +29,14 @@ export const getByPaymentRef = query({
   },
 });
 
+/** Fetches a single participant by ID. Used by the checkout action. */
+export const getParticipantById = query({
+  args: { participantId: v.id("participants") },
+  handler: async (ctx, { participantId }) => {
+    return ctx.db.get(participantId);
+  },
+});
+
 /** Returns all participants for a session (public) */
 export const getParticipantsBySession = query({
   args: { sessionId: v.id("sessions") },
@@ -42,7 +50,9 @@ export const getParticipantsBySession = query({
 
 /**
  * Called by the Bachs webhook after a verified payment.
- * Flips participant status to "sent" and records the payment reference.
+ * Flips participant status to "sent", records the payment reference,
+ * fires a notification to the organizer, and auto-closes the session
+ * when all participants have paid (food/bill modes).
  */
 export const updateParticipantStatus = mutation({
   args: {
@@ -53,10 +63,45 @@ export const updateParticipantStatus = mutation({
     const participant = await ctx.db.get(participantId);
     if (!participant) throw new Error("Participant not found");
 
-    await ctx.db.patch(participantId, {
-      status: "sent",
-      paymentRef,
+    await ctx.db.patch(participantId, { status: "sent", paymentRef });
+
+    const session = await ctx.db.get(participant.sessionId);
+    if (!session) return; // session deleted mid-flight — nothing to do
+
+    // Check if all participants are now paid (food/bill only — chop-in never auto-closes)
+    const allParticipants = await ctx.db
+      .query("participants")
+      .withIndex("by_session", (q) => q.eq("sessionId", participant.sessionId))
+      .collect();
+
+    const allPaid =
+      session.mode !== "chop-in" &&
+      allParticipants.length > 0 &&
+      allParticipants.every((p) => p.status === "sent");
+
+    // Notify organizer of this payment
+    const naira = Math.round(participant.amountOwed / 100).toLocaleString("en-NG");
+    await ctx.db.insert("notifications", {
+      userId: session.organizerId,
+      type: "payment",
+      title: `${participant.name} paid ₦${naira}`,
+      body: allPaid ? "All participants have now paid." : undefined,
+      sessionId: participant.sessionId,
+      participantId,
+      read: false,
     });
+
+    if (allPaid) {
+      await ctx.db.patch(participant.sessionId, { status: "closed" });
+      await ctx.db.insert("notifications", {
+        userId: session.organizerId,
+        type: "session_closed",
+        title: "Session fully paid 🎉",
+        body: `All participants in "${session.name}" have paid. Session is now closed.`,
+        sessionId: participant.sessionId,
+        read: false,
+      });
+    }
   },
 });
 

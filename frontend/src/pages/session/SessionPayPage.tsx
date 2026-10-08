@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation } from 'convex/react'
+import { useParams } from 'react-router-dom'
+import { useQuery, useAction } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import RemixIcon from '@/components/RemixIcon'
 
@@ -96,8 +96,7 @@ function Skeleton() {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SessionPayPage() {
-  const { slug }  = useParams<{ slug: string }>()
-  const navigate  = useNavigate()
+  const { slug } = useParams<{ slug: string }>()
 
   // Live Convex query — re-runs automatically when participant statuses change
   const session = useQuery(
@@ -109,11 +108,12 @@ export default function SessionPayPage() {
   const [method,       setMethod]      = useState('debit')
   const [paying,       setPaying]      = useState(false)
   const [payError,     setPayError]    = useState<string | null>(null)
+  const [payerEmail,   setPayerEmail]  = useState('')
   // chop-in only: contributor name + amount in naira
   const [contribution, setContribution] = useState('')
   const [chopInName,   setChopInName]  = useState('')
 
-  const demoMarkPaid = useMutation(api.participants.demoMarkPaid)
+  const initiateCheckout = useAction(api.payments.initiateCheckout)
 
   // ── Loading / not found states ────────────────────────────────────────────
 
@@ -165,44 +165,37 @@ export default function SessionPayPage() {
     setPayError(null)
     setPaying(true)
 
-    const paymentRef = 'DEMO-' + Math.random().toString(36).slice(2, 9).toUpperCase()
-    const amountPaid = isChopIn ? contributionKobo : (currentParticipant?.amountOwed ?? 0)
     const displayName = isChopIn ? (chopInName.trim() || 'Anonymous') : viewingName
 
+    const origin = import.meta.env.VITE_PUBLIC_URL || window.location.origin
+    const cancelUrl = `${origin}/s/${slug}`
+
     try {
-      await demoMarkPaid({
+      const { checkoutUrl, participantId: resolvedId } = await initiateCheckout({
         sessionId,
         participantId:   isChopIn ? undefined : currentParticipant!._id,
         contributorName: isChopIn ? displayName : undefined,
         amountKobo:      isChopIn ? contributionKobo : undefined,
-        paymentRef,
+        // Pass participantId in the success URL so PaymentSuccessPage can read it
+        // after Bachs redirects the user back. Bachs appends ?checkout_id= too.
+        successUrl: `${origin}/payment-success?participantId=${
+          isChopIn ? '__PLACEHOLDER__' : currentParticipant!._id
+        }`,
+        cancelUrl,
+        payerName:  displayName,
+        payerEmail: payerEmail.trim() || undefined,
       })
-    } catch (e) {
-      setPayError(e instanceof Error ? e.message : 'Payment failed')
-      setPaying(false)
-      return
-    }
 
-    navigate('/payment-success', {
-      state: {
-        slug,
-        title:     name,
-        mode,
-        paidBy:    displayName,
-        amount:    amountPaid,
-        method:    PAYMENT_METHODS.find(m => m.id === method)?.label ?? 'Direct Transfer',
-        paymentRef,
-        // Optimistic participant list for the success page (Convex will also re-query)
-        participants: isChopIn
-          ? [...participants, { name: displayName, amountOwed: amountPaid, status: 'sent' as const }]
-          : participants.map(p =>
-              p.name === viewingName ? { ...p, status: 'sent' as const } : p
-            ),
-        totalAmount,
-        goalAmount: goal,
-        items:      !isChopIn ? (currentParticipant?.items ?? []) : [],
-      },
-    })
+      // For chop-in: the actual ID was only resolved inside the action.
+      // Store it in sessionStorage — PaymentSuccessPage reads it on arrival.
+      sessionStorage.setItem('chops_pending_participant', resolvedId)
+
+      // Redirect to Bachs-hosted checkout page
+      window.location.href = checkoutUrl
+    } catch (e) {
+      setPayError(e instanceof Error ? e.message : 'Payment failed. Please try again.')
+      setPaying(false)
+    }
   }
 
   return (
@@ -392,6 +385,20 @@ export default function SessionPayPage() {
         {/* ── Payment method + CTA ─────────────────────────────────────────── */}
         {(isChopIn ? contributionKobo > 0 : !alreadyPaid) && (
           <>
+            {/* Email — required by Bachs to identify the payer */}
+            <div className="mb-5">
+              <p className="text-[13px] font-semibold text-neutral-700 mb-1.5">Your email</p>
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={payerEmail}
+                onChange={e => setPayerEmail(e.target.value)}
+                className="w-full border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none transition-colors bg-white"
+                onFocus={e => { e.currentTarget.style.borderColor = accentColor }}
+                onBlur={e => { e.currentTarget.style.borderColor = '' }}
+              />
+            </div>
+
             <p className="text-[13px] text-neutral-600 mb-3">Payment method</p>
             <div className="grid grid-cols-2 gap-3 mb-5">
               {PAYMENT_METHODS.map(m => (
@@ -423,7 +430,7 @@ export default function SessionPayPage() {
 
             <button
               onClick={handlePay}
-              disabled={paying}
+              disabled={paying || !payerEmail.trim()}
               className="w-full py-4 rounded-full text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               style={{ background: accentColor }}
             >

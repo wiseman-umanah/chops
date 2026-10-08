@@ -1,30 +1,12 @@
-import { useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useQuery } from 'convex/react'
 import { motion } from 'framer-motion'
+import { api } from '../../../../convex/_generated/api'
+import type { Id } from '../../../../convex/_generated/dataModel'
 import RemixIcon from '@/components/RemixIcon'
 
 const BRAND = '#FF6900'
-
-interface ParticipantState {
-  name: string
-  amountOwed: number
-  status: 'sent' | 'pending'
-  items?: { name: string; price: number }[]
-}
-
-interface SuccessState {
-  slug: string
-  title: string
-  mode: string
-  paidBy: string
-  amount: number
-  method: string
-  paymentRef?: string
-  participants: ParticipantState[]
-  totalAmount: number
-  goalAmount: number
-  items: { name: string; price: number }[]
-}
 
 function formatNaira(kobo: number) {
   return `₦${Math.round(kobo / 100).toLocaleString('en-NG')}`
@@ -37,56 +19,130 @@ function now() {
   }).replace(',', '')
 }
 
-function ref() {
-  return 'CHP-' + Math.random().toString(36).slice(2, 8).toUpperCase()
+function Skeleton() {
+  return (
+    <div className="max-w-[900px] mx-auto flex flex-col gap-6 animate-pulse">
+      <div className="h-14 bg-neutral-100 rounded-2xl max-w-[70%] mx-auto" />
+      <div className="flex gap-5">
+        <div className="flex-1 h-80 bg-neutral-100 rounded-2xl" />
+        <div className="flex-1 h-80 bg-neutral-100 rounded-2xl" />
+      </div>
+    </div>
+  )
 }
 
 export default function PaymentSuccessPage() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const state    = location.state as SuccessState | null
+  const [searchParams]  = useSearchParams()
+  const navigate        = useNavigate()
   const [copied, setCopied] = useState(false)
 
-  const title        = state?.title        ?? 'Session'
-  const paidBy       = state?.paidBy       ?? 'You'
-  const amount       = state?.amount       ?? 0
-  const method       = state?.method       ?? 'Direct Transfer'
-  const mode         = state?.mode         ?? 'food'
-  const participants = state?.participants ?? []
-  const items        = state?.items        ?? []
-  const goalAmount   = state?.goalAmount   ?? 0
-  const paymentRef   = state?.paymentRef
+  // Bachs appends ?checkout_id= to the success_url we gave it.
+  // We also embedded ?participantId= in the success_url at checkout initiation.
+  // For chop-in, the ID was stored in sessionStorage (resolved server-side in the action).
+  const urlParticipantId = searchParams.get('participantId')
+  const [participantId, setParticipantId] = useState<string | null>(
+    urlParticipantId && urlParticipantId !== '__PLACEHOLDER__' ? urlParticipantId : null
+  )
+
+  // On mount: check sessionStorage for chop-in participant ID
+  useEffect(() => {
+    if (!participantId) {
+      const stored = sessionStorage.getItem('chops_pending_participant')
+      if (stored) {
+        setParticipantId(stored)
+        sessionStorage.removeItem('chops_pending_participant')
+      }
+    }
+  }, [participantId])
+
+  // Poll the participant until the webhook has marked them as paid.
+  // Convex reactive query will re-render automatically when status changes.
+  const participant = useQuery(
+    api.participants.getParticipantById,
+    participantId ? { participantId: participantId as Id<'participants'> } : 'skip'
+  )
+
+  // Also fetch session + group data via the participant's paymentRef once paid
+  const receiptData = useQuery(
+    api.participants.getByPaymentRef,
+    participant?.paymentRef ? { paymentRef: participant.paymentRef } : 'skip'
+  )
+
+  // ── Loading state: waiting for participantId ──────────────────────────────
+  if (!participantId) {
+    return (
+      <div className="max-w-[900px] mx-auto text-center py-24">
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
+          style={{ background: '#fee2e2' }}>
+          <RemixIcon name="ri-close-circle-line" size={24} color="#dc2626" />
+        </div>
+        <p className="text-[18px] font-bold text-neutral-800 mb-1">Something went wrong</p>
+        <p className="text-[13px] text-neutral-400 mb-6">
+          We couldn't identify your payment session. Please check your notifications or contact support.
+        </p>
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="px-6 py-3 rounded-full text-[14px] font-bold text-white"
+          style={{ background: BRAND }}
+        >
+          Go to Dashboard
+        </button>
+      </div>
+    )
+  }
+
+  // ── Waiting for webhook to mark participant as paid ───────────────────────
+  if (participant === undefined || (participant && participant.status === 'pending')) {
+    return (
+      <div className="max-w-[900px] mx-auto text-center py-24">
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-6 animate-spin"
+          style={{ border: '3px solid #f3f4f6', borderTopColor: BRAND, borderRadius: '50%' }}>
+        </div>
+        <p className="text-[18px] font-bold text-neutral-800 mb-1">Confirming your payment…</p>
+        <p className="text-[13px] text-neutral-400">
+          Waiting for payment confirmation. This usually takes a few seconds.
+        </p>
+      </div>
+    )
+  }
+
+  if (participant === null) return <Skeleton />
+  if (receiptData === undefined) return <Skeleton />
+
+  // ── Data resolved ─────────────────────────────────────────────────────────
+  const session      = receiptData?.session
+  const allParticipants = receiptData?.allParticipants ?? []
+
+  const title      = session?.name ?? 'Payment'
+  const mode       = session?.mode ?? 'food'
+  const amount     = participant.amountOwed
+  const paymentRef = participant.paymentRef
+  const timestamp  = now()
+
+  const paidCount  = allParticipants.filter(p => p.status === 'sent').length
+  const totalCount = allParticipants.length
+  const goalAmount = session?.goalAmount ?? session?.totalAmount ?? 0
+  const collected  = allParticipants.reduce((s, p) => s + (p.status === 'sent' ? p.amountOwed : 0), 0)
+  const pct        = mode === 'chop-in'
+    ? (goalAmount > 0 ? Math.min(100, Math.round((collected / goalAmount) * 100)) : 0)
+    : (totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0)
+
+  const lineItems = participant.items && participant.items.length > 0
+    ? participant.items.map(it => ({ label: it.name, amount: it.price }))
+    : [{ label: title, amount }]
 
   function copyReceiptLink() {
     if (!paymentRef) return
-    const url = `${window.location.origin}/r/${paymentRef}`
-    navigator.clipboard.writeText(url).then(() => {
+    navigator.clipboard.writeText(`${window.location.origin}/r/${paymentRef}`).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
   }
 
-  const paidCount    = participants.filter(p => p.status === 'sent').length
-  const totalCount   = participants.length
-
-  // Progress — food/bill: paidCount ratio; chop-in: collected vs goal
-  const collected    = participants.reduce((s, p) => s + (p.status === 'sent' ? p.amountOwed : 0), 0)
-  const pct          = mode === 'chop-in'
-    ? (goalAmount > 0 ? Math.min(100, Math.round((collected / goalAmount) * 100)) : 0)
-    : (totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0)
-
-  const reference  = ref()
-  const timestamp  = now()
-
-  // Line items for the receipt — use real food items when available, else show the total
-  const receiptLines = items.length > 0
-    ? items.map(it => ({ label: it.name, amount: it.price }))
-    : [{ label: title, amount }]
-
   return (
     <div className="max-w-[900px] mx-auto">
 
-      {/* ── Success banner ───────────────────────────────────────────────── */}
+      {/* ── Success banner ─────────────────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -104,7 +160,7 @@ export default function PaymentSuccessPage() {
         </div>
       </motion.div>
 
-      {/* ── Two-column layout ─────────────────────────────────────────────── */}
+      {/* ── Two-column layout ──────────────────────────────────────────── */}
       <div className="flex flex-col lg:flex-row gap-5 items-start">
 
         {/* Left: Receipt */}
@@ -117,22 +173,22 @@ export default function PaymentSuccessPage() {
           <p className="text-[12px] text-neutral-400 mb-1 uppercase tracking-wide">Receipt</p>
           <h2 className="text-[20px] font-bold text-neutral-900 mb-6">{title}</h2>
 
-          {/* Meta rows */}
           {[
-            { label: 'Reference', value: reference },
-            { label: 'Paid by',   value: paidBy    },
-            { label: 'Method',    value: method    },
+            { label: 'Reference', value: paymentRef ?? '—' },
+            { label: 'Paid by',   value: participant.name },
+            { label: 'Method',    value: 'Bank Transfer' },
             { label: 'Date',      value: timestamp },
           ].map(row => (
             <div key={row.label} className="flex justify-between text-[13px] py-2">
               <span className="text-neutral-500">{row.label}</span>
-              <span className="font-bold text-neutral-900">{row.value}</span>
+              <span className="font-bold text-neutral-900 break-all text-right max-w-[60%]">
+                {row.value}
+              </span>
             </div>
           ))}
 
-          {/* Line items */}
           <div className="border-t border-dashed border-neutral-200 my-4" />
-          {receiptLines.map((line, i) => (
+          {lineItems.map((line, i) => (
             <div key={i} className="flex justify-between text-[13px] py-1.5">
               <span className="text-neutral-600 truncate pr-4">{line.label}</span>
               <span className="font-bold text-neutral-900 shrink-0">{formatNaira(line.amount)}</span>
@@ -144,7 +200,6 @@ export default function PaymentSuccessPage() {
             <span>{formatNaira(amount)}</span>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3 mt-6">
             <button
               onClick={() => paymentRef && window.open(`/r/${paymentRef}`, '_blank')}
@@ -172,7 +227,6 @@ export default function PaymentSuccessPage() {
           transition={{ duration: 0.35, delay: 0.12, ease: 'easeOut' }}
           className="w-full lg:w-[52%] border border-neutral-200 rounded-2xl p-7 flex flex-col gap-6"
         >
-          {/* Group progress */}
           <div>
             <h3 className="text-[15px] font-bold text-neutral-900 mb-0.5">Group progress</h3>
             <p className="text-[13px] text-neutral-400 mb-3">
@@ -182,7 +236,6 @@ export default function PaymentSuccessPage() {
               }
             </p>
 
-            {/* Progress bar */}
             <div className="h-2.5 rounded-full bg-neutral-100 overflow-hidden mb-5">
               <motion.div
                 initial={{ width: 0 }}
@@ -193,10 +246,9 @@ export default function PaymentSuccessPage() {
               />
             </div>
 
-            {/* Participant status list */}
-            {participants.length > 0 && (
+            {allParticipants.length > 0 && (
               <div className="flex flex-col gap-2">
-                {participants.map((p, i) => (
+                {allParticipants.map((p, i) => (
                   <div key={i} className="flex items-center justify-between text-[13px]">
                     <div className="min-w-0">
                       <span className="font-medium text-neutral-800 truncate block">{p.name}</span>
@@ -220,7 +272,6 @@ export default function PaymentSuccessPage() {
               </div>
             )}
 
-            {/* Chop-in: show total remaining */}
             {mode === 'chop-in' && goalAmount > 0 && (
               <div className="mt-4 pt-4 border-t border-neutral-100 flex justify-between text-[13px]">
                 <span className="text-neutral-500">Remaining</span>
@@ -231,7 +282,6 @@ export default function PaymentSuccessPage() {
             )}
           </div>
 
-          {/* Back to Dashboard */}
           <button
             onClick={() => navigate('/dashboard')}
             className="w-full py-4 rounded-full text-[14px] font-bold text-white transition-opacity hover:opacity-90 mt-auto"
