@@ -283,16 +283,38 @@ export const requestPayout = action({
       }),
     });
 
+    const isSandbox = process.env.BACHS_ENV !== "production";
+
+    let bachsPayoutId: string;
+
     if (!payoutRes.ok) {
-      const errText = await payoutRes.text().catch(() => "");
-      throw new Error(`Payout failed (${payoutRes.status}${errText ? ": " + errText : ""})`);
+      const errBody = await payoutRes.json().catch(() => ({ error_code: "UNKNOWN" })) as {
+        error_code?: string;
+        detail?: string;
+      };
+
+      // In sandbox, Bachs never credits collected payments to the balance,
+      // so INSUFFICIENT_BALANCE is expected. Simulate success so the full
+      // UI flow can be tested without a real funded balance.
+      if (isSandbox && errBody.error_code === "INSUFFICIENT_BALANCE") {
+        console.log(
+          `[sandbox] Bypassing INSUFFICIENT_BALANCE — simulating payout success. ` +
+          `In production this requires a funded NGN balance.`
+        );
+        bachsPayoutId = `sandbox_simulated_${reference}`;
+      } else {
+        throw new Error(
+          errBody.detail ??
+          `Payout failed (${payoutRes.status})`
+        );
+      }
+    } else {
+      const payoutData = await payoutRes.json() as { id: string };
+      bachsPayoutId = payoutData.id;
     }
 
-    const payoutData = await payoutRes.json() as { id: string };
-    const bachsPayoutId = payoutData.id;
-
     // ── 3. Insert payout record ──────────────────────────────────────────────
-    await ctx.runMutation(internal.payouts.insertPayoutRecord, {
+    const payoutDbId = await ctx.runMutation(internal.payouts.insertPayoutRecord, {
       sessionId: args.sessionId,
       organizerId: userId,
       amountKobo: payoutKobo,
@@ -304,6 +326,27 @@ export const requestPayout = action({
       bachsPayoutId,
       reference,
     });
+
+    // ── 4. Sandbox: simulate immediate payout.paid since no real webhook arrives ──
+    if (isSandbox && bachsPayoutId.startsWith("sandbox_simulated_")) {
+      await ctx.runMutation(internal.payouts.updatePayoutStatus, {
+        payoutId: payoutDbId,
+        status: "completed",
+      });
+      await ctx.runMutation(internal.sessions.setSessionStatus, {
+        sessionId: args.sessionId,
+        status: "inactive",
+      });
+      const naira = Math.round(payoutKobo / 100).toLocaleString("en-NG");
+      const masked = "•".repeat(args.accountNumber.length - 4) + args.accountNumber.slice(-4);
+      await ctx.runMutation(internal.notifications.insertSystemNotification, {
+        userId,
+        type: "session_closed",
+        title: `₦${naira} delivered to your bank`,
+        body: `[Sandbox] Payout to ${args.bankName} (${masked}) simulated as delivered.`,
+        sessionId: args.sessionId,
+      });
+    }
 
     return { reference, bachsPayoutId, resolvedName };
   },

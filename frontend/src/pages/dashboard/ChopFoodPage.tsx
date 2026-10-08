@@ -313,51 +313,113 @@ export default function ChopFoodPage() {
           <div className="border border-neutral-200 rounded-2xl p-6">
             <h3 className="text-[15px] font-bold text-neutral-900 mb-4">Menu</h3>
 
-            <div className="grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr 80px 100px 140px 36px' }}>
+            {/* Desktop column headers — hidden on mobile */}
+            <div className="hidden sm:grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr 80px 100px 140px 36px' }}>
               {['Food Name', 'Amount', 'Price (₦)', 'Participant', ''].map(h => (
                 <span key={h} className="text-[12px] font-semibold text-neutral-500">{h}</span>
               ))}
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               {items.map(item => (
-                <div key={item.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: '1fr 80px 100px 140px 36px' }}>
-                  <input
-                    className={inputCls}
-                    placeholder="Jollof rice"
-                    value={item.name}
-                    onChange={e => updateItem(item.id, { name: e.target.value })}
-                  />
-                  <div className="flex items-center justify-between border border-neutral-200 rounded-full px-3 py-2 bg-white">
-                    <button onClick={() => updateItem(item.id, { qty: Math.max(1, item.qty - 1) })}
-                      className="text-neutral-400 hover:text-neutral-700 text-[16px] leading-none w-4">−</button>
-                    <span className="text-[13px] font-medium text-neutral-800">{item.qty}</span>
-                    <button onClick={() => updateItem(item.id, { qty: item.qty + 1 })}
-                      className="text-neutral-400 hover:text-neutral-700 text-[16px] leading-none w-4">+</button>
-                  </div>
-                  <div className="flex items-center border border-neutral-200 rounded-full px-3 py-2 bg-white gap-1">
+                <div key={item.id}>
+                  {/* ── Desktop row ── */}
+                  <div className="hidden sm:grid gap-2 items-center" style={{ gridTemplateColumns: '1fr 80px 100px 140px 36px' }}>
                     <input
-                      type="number" min="0"
-                      className="flex-1 text-[13px] text-neutral-800 outline-none w-0 min-w-0 bg-transparent"
-                      placeholder="0"
-                      value={item.price || ''}
-                      onChange={e => updateItem(item.id, { price: parseFloat(e.target.value) || 0 })}
+                      className={inputCls}
+                      placeholder="Jollof rice"
+                      value={item.name}
+                      onChange={e => updateItem(item.id, { name: e.target.value })}
                     />
-                    <button onClick={() => updateItem(item.id, { price: Math.max(0, item.price - 100) })}
-                      className="text-neutral-400 hover:text-neutral-700 text-[14px] leading-none">−</button>
+                    <div className="flex items-center justify-between border border-neutral-200 rounded-full px-3 py-2 bg-white">
+                      <button onClick={() => updateItem(item.id, { qty: Math.max(1, item.qty - 1) })}
+                        className="text-neutral-400 hover:text-neutral-700 text-[16px] leading-none w-4">−</button>
+                      <span className="text-[13px] font-medium text-neutral-800">{item.qty}</span>
+                      <button onClick={() => updateItem(item.id, { qty: item.qty + 1 })}
+                        className="text-neutral-400 hover:text-neutral-700 text-[16px] leading-none w-4">+</button>
+                    </div>
+                    <div className="flex items-center border border-neutral-200 rounded-full px-3 py-2 bg-white gap-1">
+                      <input
+                        type="number" min="0"
+                        className="flex-1 text-[13px] text-neutral-800 outline-none w-0 min-w-0 bg-transparent"
+                        placeholder="0"
+                        value={item.price || ''}
+                        onChange={e => updateItem(item.id, { price: parseFloat(e.target.value) || 0 })}
+                      />
+                      <button onClick={() => updateItem(item.id, { price: Math.max(0, item.price - 100) })}
+                        className="text-neutral-400 hover:text-neutral-700 text-[14px] leading-none">−</button>
+                    </div>
+                    <ParticipantSelect
+                      value={item.participant}
+                      options={participants}
+                      onChange={v => updateItem(item.id, { participant: v })}
+                    />
+                    <button
+                      onClick={() => removeItem(item.id)}
+                      disabled={items.length === 1}
+                      className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors disabled:opacity-30"
+                    >
+                      <RemixIcon name='ri-delete-bin-5-fill' color='#FB2C36' />
+                    </button>
                   </div>
-                  <ParticipantSelect
-                    value={item.participant}
-                    options={participants}
-                    onChange={v => updateItem(item.id, { participant: v })}
-                  />
-                  <button
-                    onClick={() => removeItem(item.id)}
-                    disabled={items.length === 1}
-                    className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors disabled:opacity-30"
-                  >
-                    <RemixIcon name='ri-delete-bin-5-fill' color='#FB2C36' />
-                  </button>
+
+                  {/* ── Mobile card ── */}
+                  <div className="sm:hidden border border-neutral-200 rounded-2xl p-4 flex flex-col gap-3">
+                    {/* Row 1: food name + delete */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        className={`${inputCls} flex-1`}
+                        placeholder="Jollof rice"
+                        value={item.name}
+                        onChange={e => updateItem(item.id, { name: e.target.value })}
+                      />
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        disabled={items.length === 1}
+                        className="w-9 h-9 shrink-0 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors disabled:opacity-30"
+                      >
+                        <RemixIcon name='ri-delete-bin-5-fill' color='#FB2C36' />
+                      </button>
+                    </div>
+
+                    {/* Row 2: qty + price side by side */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold text-neutral-500 mb-1.5">Amount</p>
+                        <div className="flex items-center justify-between border border-neutral-200 rounded-full px-3 py-2 bg-white">
+                          <button onClick={() => updateItem(item.id, { qty: Math.max(1, item.qty - 1) })}
+                            className="text-neutral-400 hover:text-neutral-700 text-[16px] leading-none w-5">−</button>
+                          <span className="text-[13px] font-medium text-neutral-800">{item.qty}</span>
+                          <button onClick={() => updateItem(item.id, { qty: item.qty + 1 })}
+                            className="text-neutral-400 hover:text-neutral-700 text-[16px] leading-none w-5">+</button>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold text-neutral-500 mb-1.5">Price (₦)</p>
+                        <div className="flex items-center border border-neutral-200 rounded-full px-3 py-2 bg-white gap-1">
+                          <input
+                            type="number" min="0"
+                            className="flex-1 text-[13px] text-neutral-800 outline-none w-0 min-w-0 bg-transparent"
+                            placeholder="0"
+                            value={item.price || ''}
+                            onChange={e => updateItem(item.id, { price: parseFloat(e.target.value) || 0 })}
+                          />
+                          <button onClick={() => updateItem(item.id, { price: Math.max(0, item.price - 100) })}
+                            className="text-neutral-400 hover:text-neutral-700 text-[14px] leading-none">−</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Row 3: participant full width */}
+                    <div>
+                      <p className="text-[11px] font-semibold text-neutral-500 mb-1.5">Participant</p>
+                      <ParticipantSelect
+                        value={item.participant}
+                        options={participants}
+                        onChange={v => updateItem(item.id, { participant: v })}
+                      />
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

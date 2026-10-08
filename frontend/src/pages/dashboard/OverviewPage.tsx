@@ -314,29 +314,58 @@ export default function OverviewPage() {
   const pendingKobo = stats?.pendingKobo ?? 0
   const settledKobo = stats?.settledKobo ?? 0
 
-  const STATS = [
-    {
-      label: 'Active Chops',
-      value: String(activeChops),
-      valueColor: BRAND,
-      badge: null,
-      bg: '#f5f5f5',
+  function formatCount(value: number) {
+  return new Intl.NumberFormat('en-NG', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value)
+}
+
+function formatNairaCompact(kobo: number) {
+  const naira = kobo / 100
+
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN',
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(naira)
+}
+
+const STATS = [
+  {
+    label: 'Active Chops',
+    value: activeChops,
+    format: 'count' as const,
+    valueColor: BRAND,
+    badge: null,
+    bg: '#f5f5f5',
+  },
+  {
+    label: 'Pending collections',
+    value: pendingKobo,
+    format: 'naira' as const,
+    valueColor: BRAND,
+    badge: {
+      text: 'Pending',
+      bg: '#fed7aa',
+      color: '#9a3412',
     },
-    {
-      label: 'Pending collections',
-      value: pendingKobo > 0 ? formatNaira(pendingKobo) : '₦0',
-      valueColor: BRAND,
-      badge: { text: 'Pending', bg: '#fed7aa', color: '#9a3412' },
-      bg: '#fff7ed',
+    bg: '#fff7ed',
+  },
+  {
+    label: 'Total settled',
+    value: settledKobo,
+    format: 'naira' as const,
+    valueColor: '#16a34a',
+    badge: {
+      text: 'Settled',
+      bg: '#dcfce7',
+      color: '#166534',
     },
-    {
-      label: 'Total settled',
-      value: settledKobo > 0 ? formatNaira(settledKobo) : '₦0',
-      valueColor: '#16a34a',
-      badge: { text: 'Settled', bg: '#dcfce7', color: '#166534' },
-      bg: '#f0fdf4',
-    },
-  ]
+    bg: '#f0fdf4',
+  },
+]
 
   async function handleDelete(sessionId: Id<'sessions'>) {
     setDeletingId(sessionId)
@@ -385,33 +414,63 @@ export default function OverviewPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12">
-        {STATS.map((stat, i) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: i * 0.07, ease: 'easeOut' }}
-            className="rounded-2xl py-10 px-15"
-            style={{ background: stat.bg }}
-          >
-            <div className="flex items-center gap-4 mb-3">
-              <span className="text-[13px] text-neutral-600">{stat.label}</span>
-              {stat.badge && (
-                <span
-                  className="text-[11px] px-5 py-1.5 rounded-full"
-                  style={{ background: stat.badge.bg, color: stat.badge.color }}
-                >
-                  {stat.badge.text}
-                </span>
-              )}
-            </div>
-            <p className="text-[32px] leading-none" style={{ color: stat.valueColor }}>
-              {stats === undefined ? '…' : stat.value}
-            </p>
-          </motion.div>
-        ))}
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+		{STATS.map((stat, i) => {
+			const displayValue =
+			stats === undefined
+				? '…'
+				: stat.format === 'naira'
+				? formatNairaCompact(stat.value)
+				: formatCount(stat.value)
+
+			return (
+			<motion.div
+				key={stat.label}
+				initial={{ opacity: 0, y: 14 }}
+				animate={{ opacity: 1, y: 0 }}
+				transition={{
+				duration: 0.3,
+				delay: i * 0.07,
+				ease: 'easeOut',
+				}}
+				className="min-w-0 rounded-2xl py-10 px-6 sm:px-8"
+				style={{ background: stat.bg }}
+			>
+				<div className="flex min-w-0 items-center gap-3 mb-3">
+				<span className="min-w-0 text-[13px] text-neutral-600">
+					{stat.label}
+				</span>
+
+				{stat.badge && (
+					<span
+					className="shrink-0 text-[11px] px-3 py-1.5 rounded-full"
+					style={{
+						background: stat.badge.bg,
+						color: stat.badge.color,
+					}}
+					>
+					{stat.badge.text}
+					</span>
+				)}
+				</div>
+
+				<p
+				className="text-[32px] leading-none tabular-nums whitespace-nowrap"
+				style={{ color: stat.valueColor }}
+				title={
+					stats === undefined
+					? undefined
+					: stat.format === 'naira'
+						? formatNaira(stat.value)
+						: stat.value.toLocaleString('en-NG')
+				}
+				>
+				{displayValue}
+				</p>
+			</motion.div>
+			)
+		})}
+		</div>
 
       {/* Quick Actions */}
       <h2 className="text-[18px] font-bold text-neutral-900 mb-5">Chop Quick Actions</h2>
@@ -439,8 +498,8 @@ export default function OverviewPage() {
 
       {/* ── Your Chops ─────────────────────────────────────────────────────── */}
       <div className="mb-12">
-        <div className="flex items-center justify-between my-10">
-          <h2 className="text-[18px] font-bold text-neutral-900">Your Chops</h2>
+        <div className="flex flex-col sm:flex-row items-left sm:items-center justify-between my-10">
+          <h2 className="text-[18px] font-bold text-neutral-900 mb-4">Your Chops</h2>
 
           {/* Filter tabs */}
           <div className="flex gap-1 bg-neutral-100 rounded-full p-1">
@@ -479,118 +538,302 @@ export default function OverviewPage() {
           </div>
         ) : (
           <AnimatePresence initial={false}>
-            <div className="flex flex-col gap-3">
-              {sessions.map((session, i) => {
-                const meta = MODE_META[session.mode] ?? MODE_META.food
-                const isActive   = session.status === 'active'
-                const isComplete = session.status === 'closed'
-                const isInactive = session.status === 'inactive'
-                const isDeleting = deletingId === session._id
+			<div className="flex flex-col gap-3">
+				{sessions.map((session, i) => {
+				const meta = MODE_META[session.mode] ?? MODE_META.food
 
-                const statusBadge = isActive
-                  ? { label: 'Active',    bg: '#dcfce7', color: '#166534' }
-                  : isComplete
-                  ? { label: 'Completed', bg: '#fef9c3', color: '#92400e' }
-                  : { label: 'Inactive',  bg: '#f3f4f6', color: '#6b7280' }
+				const isActive = session.status === 'active'
+				const isComplete = session.status === 'closed'
+				const isInactive = session.status === 'inactive'
+				const isDeleting = deletingId === session._id
 
-                return (
-                  <motion.div
-                    key={session._id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.97 }}
-                    transition={{ duration: 0.2, delay: i * 0.04 }}
-                    className="border border-neutral-200 rounded-2xl px-5 py-4 flex items-center gap-4"
-                  >
-                    {/* Mode icon */}
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                      style={{ background: meta.color }}
-                    >
-                      <RemixIcon name={meta.icon} size={18} color="#fff" />
-                    </div>
+				const statusBadge = isActive
+					? {
+						label: 'Active',
+						bg: '#dcfce7',
+						color: '#166534',
+					}
+					: isComplete
+					? {
+						label: 'Completed',
+						bg: '#fef9c3',
+						color: '#92400e',
+						}
+					: {
+						label: 'Inactive',
+						bg: '#f3f4f6',
+						color: '#6b7280',
+						}
 
-                    {/* Details */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[14px] font-bold text-neutral-900 truncate">{session.name}</span>
-                        <span
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
-                          style={{ background: statusBadge.bg, color: statusBadge.color }}
-                        >
-                          {statusBadge.label}
-                        </span>
-                      </div>
-                      <p className="text-[12px] text-neutral-400 font-mono mb-1">{session.slug}</p>
-                      <div className="flex items-center gap-3 text-[12px] text-neutral-500">
-                        <span>{session.paidCount}/{session.participantCount} paid</span>
-                        <span>·</span>
-                        <span className="text-[#16a34a] font-medium">{formatNaira(session.paidAmount)} settled</span>
-                        {session.pendingAmount > 0 && (
-                          <>
-                            <span>·</span>
-                            <span className="text-[#9a3412] font-medium">{formatNaira(session.pendingAmount)} pending</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
+				return (
+					<motion.div
+					key={session._id}
+					initial={{ opacity: 0, y: 10 }}
+					animate={{ opacity: 1, y: 0 }}
+					exit={{ opacity: 0, scale: 0.97 }}
+					transition={{
+						duration: 0.2,
+						delay: i * 0.04,
+					}}
+					className="
+						border border-neutral-200
+						rounded-2xl
+						px-4 sm:px-5
+						py-4
+						flex flex-col sm:flex-row
+						sm:items-center
+						gap-4
+					"
+					>
+					{/* Top / main content */}
+					<div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+						{/* Mode icon */}
+						<div
+						className="
+							w-10 h-10
+							rounded-full
+							flex items-center justify-center
+							shrink-0
+						"
+						style={{ background: meta.color }}
+						>
+						<RemixIcon
+							name={meta.icon}
+							size={18}
+							color="#fff"
+						/>
+						</div>
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* Share always visible */}
-                      <button
-                        onClick={() => handleShare(session.slug, session.name, session.totalAmount, session.mode)}
-                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-100 transition-colors"
-                        title="Share link"
-                      >
-                        <RemixIcon name="ri-share-line" size={16} color="#6b7280" />
-                      </button>
+						{/* Details */}
+						<div className="flex-1 min-w-0">
+						{/* Name + status */}
+						<div className="flex items-center gap-2 mb-1 min-w-0">
+							<span
+							className="
+								text-[14px]
+								font-bold
+								text-neutral-900
+								truncate
+								min-w-0
+							"
+							>
+							{session.name}
+							</span>
 
-                      {/* Finalize — completed food/bill only (chop-in is via wallet) */}
-                      {isComplete && session.mode !== 'chop-in' && (
-                        <button
-                          onClick={() => setFinalizeSession(session)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold text-white transition-opacity hover:opacity-85"
-                          style={{ background: BRAND }}
-                          title="Finalize payout"
-                        >
-                          <RemixIcon name="ri-bank-card-line" size={13} color="#fff" />
-                          Finalize
-                        </button>
-                      )}
+							<span
+							className="
+								text-[10px]
+								font-semibold
+								px-2
+								py-0.5
+								rounded-full
+								shrink-0
+							"
+							style={{
+								background: statusBadge.bg,
+								color: statusBadge.color,
+							}}
+							>
+							{statusBadge.label}
+							</span>
+						</div>
 
-                      {session.canEdit && (
-                        <>
-                          <button
-                            onClick={() => handleEdit(session)}
-                            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-orange-50 transition-colors"
-                            title="Edit"
-                          >
-                            <RemixIcon name="ri-pencil-line" size={16} color={BRAND} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(session._id)}
-                            disabled={isDeleting}
-                            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors disabled:opacity-40"
-                            title="Delete"
-                          >
-                            <RemixIcon name="ri-delete-bin-5-fill" size={16} color="#FB2C36" />
-                          </button>
-                        </>
-                      )}
+						{/* Slug */}
+						<p
+							className="
+							text-[12px]
+							text-neutral-400
+							font-mono
+							mb-1.5
+							truncate
+							"
+						>
+							{session.slug}
+						</p>
 
-                      {isInactive && (
-                        <span className="text-[11px] text-neutral-400 flex items-center gap-1">
-                          <RemixIcon name="ri-checkbox-circle-fill" size={13} color="#16a34a" />
-                          Paid out
-                        </span>
-                      )}
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </div>
-          </AnimatePresence>
+						{/* Payment details */}
+						<div
+							className="
+							flex
+							flex-wrap
+							items-center
+							gap-x-2
+							gap-y-1
+							text-[12px]
+							text-neutral-500
+							"
+						>
+							<span className="whitespace-nowrap">
+							{session.paidCount}/{session.participantCount} paid
+							</span>
+
+							<span className="text-neutral-300 hidden xs:inline">
+							·
+							</span>
+
+							<span className="text-[#16a34a] font-medium whitespace-nowrap">
+							{formatNaira(session.paidAmount)} settled
+							</span>
+
+							{session.pendingAmount > 0 && (
+							<>
+								<span className="text-neutral-300 hidden xs:inline">
+								·
+								</span>
+
+								<span className="text-[#9a3412] font-medium whitespace-nowrap">
+								{formatNaira(session.pendingAmount)} pending
+								</span>
+							</>
+							)}
+						</div>
+						</div>
+					</div>
+
+					{/* Actions */}
+					<div
+						className="
+						flex
+						items-center
+						sm:justify-end justify-between
+						gap-1.5
+						sm:shrink-0
+						border-t
+						border-neutral-100
+						pt-3
+						sm:border-0
+						sm:pt-0
+						"
+					>
+						{/* Share */}
+						<button
+						onClick={() =>
+							handleShare(
+							session.slug,
+							session.name,
+							session.totalAmount,
+							session.mode,
+							)
+						}
+						className="
+							w-8 h-8
+							flex items-center justify-center
+							rounded-full
+							hover:bg-neutral-100
+							transition-colors
+						"
+						title="Share link"
+						aria-label="Share link"
+						>
+						<RemixIcon
+							name="ri-share-line"
+							size={16}
+							color="#6b7280"
+						/>
+						</button>
+
+						{/* Finalize */}
+						{isComplete && session.mode !== 'chop-in' && (
+						<button
+							onClick={() => setFinalizeSession(session)}
+							className="
+							flex
+							items-center
+							gap-1.5
+							px-3
+							py-1.5
+							rounded-full
+							text-[12px]
+							font-bold
+							text-white
+							transition-opacity
+							hover:opacity-85
+							whitespace-nowrap
+							"
+							style={{ background: BRAND }}
+							title="Finalize payout"
+						>
+							<RemixIcon
+							name="ri-bank-card-line"
+							size={13}
+							color="#fff"
+							/>
+							<span>Finalize</span>
+						</button>
+						)}
+
+						{/* Edit + Delete */}
+						{session.canEdit && (
+						<>
+							<button
+							onClick={() => handleEdit(session)}
+							className="
+								w-8 h-8
+								flex items-center justify-center
+								rounded-full
+								hover:bg-orange-50
+								transition-colors
+							"
+							title="Edit"
+							aria-label="Edit session"
+							>
+							<RemixIcon
+								name="ri-pencil-line"
+								size={16}
+								color={BRAND}
+							/>
+							</button>
+
+							<button
+							onClick={() => handleDelete(session._id)}
+							disabled={isDeleting}
+							className="
+								w-8 h-8
+								flex items-center justify-center
+								rounded-full
+								hover:bg-red-50
+								transition-colors
+								disabled:opacity-40
+							"
+							title="Delete"
+							aria-label="Delete session"
+							>
+							<RemixIcon
+								name="ri-delete-bin-5-fill"
+								size={16}
+								color="#FB2C36"
+							/>
+							</button>
+						</>
+						)}
+
+						{/* Paid out */}
+						{isInactive && (
+						<span
+							className="
+							text-[11px]
+							text-neutral-400
+							flex
+							items-center
+							gap-1
+							ml-1
+							whitespace-nowrap
+							"
+						>
+							<RemixIcon
+							name="ri-checkbox-circle-fill"
+							size={13}
+							color="#16a34a"
+							/>
+							Paid out
+						</span>
+						)}
+					</div>
+					</motion.div>
+				)
+				})}
+			</div>
+			</AnimatePresence>
         )}
       </div>
 

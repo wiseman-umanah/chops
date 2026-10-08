@@ -74,7 +74,7 @@ export default function ShareLinkPage() {
           )}
 
           {/* URL + copy button */}
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-start sm:items-center flex-col sm:flex-row gap-3 mb-4">
             <div className="flex-1 border border-neutral-200 rounded-full px-4 py-2.5 overflow-hidden">
               <p className="text-[13px] text-neutral-400 truncate underline">{shareUrl}</p>
             </div>
@@ -110,7 +110,7 @@ export default function ShareLinkPage() {
             style={{ background: '#e2ddd5' }}
           >
             {/* Text bubble */}
-            <div className="ml-auto max-w-[82%] w-fit">
+            <div className="ml-auto w-full sm:max-w-[85%] w-fit">
               <div
                 className="rounded-2xl rounded-br-none px-3.5 py-2.5"
                 style={{ background: '#dcf8c6' }}

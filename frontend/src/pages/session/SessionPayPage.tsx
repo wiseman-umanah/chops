@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useAction } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import RemixIcon from '@/components/RemixIcon'
@@ -115,6 +115,8 @@ export default function SessionPayPage() {
   const [chopInName,   setChopInName]  = useState('')
 
   const initiateCheckout = useAction(api.payments.initiateCheckout)
+  const navigate  = useNavigate()
+
 
   // ── Loading / not found states ────────────────────────────────────────────
 
@@ -209,6 +211,14 @@ export default function SessionPayPage() {
         description={seoDesc}
         path={`/s/${slug}`}
       />
+		{/* ── Back navigation ──────────────────────────────────────────────────── */}
+		<button
+		onClick={() => navigate(-1)}
+		className="flex items-center gap-1.5 text-[13px] font-semibold text-neutral-500 hover:text-neutral-800 transition-colors mb-6"
+		>
+		<RemixIcon name="ri-arrow-left-line" size={16} />
+		Back
+		</button>
 
       {/* ── Mode header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 mb-5">
