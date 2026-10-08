@@ -22,6 +22,7 @@ import PublicLayout from './layouts/PublicLayout'
 import SessionPayPage from './pages/session/SessionPayPage'
 import PaymentSuccessPage from './pages/session/PaymentSuccessPage'
 import ChopInPage from './pages/dashboard/ChopInPage'
+import ChopBillPage from './pages/dashboard/ChopBillPage'
 
 // Landing shell — nav + footer wrapping public pages
 function LandingShell() {
@@ -69,6 +70,7 @@ export default function App() {
           <Route index             element={<OverviewPage />} />
           <Route path="chop-food" element={<ChopFoodPage />} />
           <Route path="chop-in" element={<ChopInPage />} />
+          <Route path="chop-bill" element={<ChopBillPage />} />
           <Route path="share"     element={<ShareLinkPage />} />
         </Route>
 

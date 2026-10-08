@@ -52,7 +52,7 @@ const QUICK_ACTIONS = [
     label: 'Chop Bill',
     desc: 'Split expenses equally by custom amount, or by percentage.',
     iconBg: '#FB2C36',
-    icon: 'ri-hand-coin-fill',
+    icon: 'ri-coupon-5-line',
     path: '/dashboard/chop-bill',
   },
 ]
