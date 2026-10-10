@@ -26,7 +26,10 @@ export default function ShareLinkPage() {
   const slug     = state?.slug ?? ''
   const title    = state?.title ?? 'My Chop'
   const shareUrl = slug ? payUrl(slug) : ''
-  const defaultMsg = `Hey! Settle your share for "${title}" on Chop 👉 ${shareUrl}`
+  const mode       = state?.mode ?? ''
+  const defaultMsg = mode === 'chop-in'
+    ? `Hey! Join the "${title}" fund on Chop 👉 ${shareUrl}`
+    : `Hey! Settle your share for "${title}" on Chop 👉 ${shareUrl}`
   // Computed once on mount — the timestamp shown in the WhatsApp preview bubble
   const msgTimestamp = useMemo(
     () => new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true }),
