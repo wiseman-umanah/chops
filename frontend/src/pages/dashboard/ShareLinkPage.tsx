@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import RemixIcon from '@/components/RemixIcon'
 import { QRCodeSVG } from 'qrcode.react'
 import { Seo } from '@/hooks/useSeo'
@@ -27,6 +27,11 @@ export default function ShareLinkPage() {
   const title    = state?.title ?? 'My Chop'
   const shareUrl = slug ? payUrl(slug) : ''
   const waMessage = `Hey! Settle your share for "${title}" on Chop 👉 ${shareUrl}`
+  // Computed once on mount — the timestamp shown in the WhatsApp preview bubble
+  const msgTimestamp = useMemo(
+    () => new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    []
+  )
 
   const [copied,      setCopied]      = useState(false)
   const [copiedCode,  setCopiedCode]  = useState(false)
@@ -147,10 +152,10 @@ export default function ShareLinkPage() {
                   className="mt-2 rounded-xl overflow-hidden border border-black/10"
                   style={{ background: '#fff' }}
                 >
-                  {/* OG image */}
+                  {/* OG image preview — small WebP, the full og-image.png is only for crawlers */}
                   <div className="w-full overflow-hidden" style={{ height: 140 }}>
                     <img
-                      src="/og-image.png"
+                      src="/og-image.webp"
                       alt="Chop link preview"
                       className="w-full h-full object-cover object-top"
                     />
@@ -172,7 +177,7 @@ export default function ShareLinkPage() {
                 {/* Timestamp + ticks */}
                 <div className="flex justify-end items-center gap-1 mt-1">
                   <span className="text-[10px] text-neutral-400">
-                    {new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                    {msgTimestamp}
                   </span>
                   <svg width="16" height="11" viewBox="0 0 16 11" fill="none">
                     <path d="M1 5.5L4.5 9L10 3" stroke="#53bdeb" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>

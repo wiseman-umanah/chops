@@ -467,8 +467,8 @@ const STATS = [
 				initial={{ opacity: 0, y: 14 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{
-				duration: 0.3,
-				delay: i * 0.07,
+				duration: 0.2,
+				delay: i * 0.04,
 				ease: 'easeOut',
 				}}
 				className="min-w-0 rounded-2xl py-10 px-6 sm:px-8"
@@ -527,7 +527,7 @@ const STATS = [
             key={action.label}
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 + i * 0.07, ease: 'easeOut' }}
+            transition={{ duration: 0.2, delay: 0.1 + i * 0.04, ease: 'easeOut' }}
             onClick={() => navigate(action.path)}
             className="text-left border border-neutral-200 rounded-2xl p-6 hover:border-neutral-300 hover:shadow-sm transition-all group"
           >
@@ -626,8 +626,8 @@ const STATS = [
 					animate={{ opacity: 1, y: 0 }}
 					exit={{ opacity: 0, scale: 0.97 }}
 					transition={{
-						duration: 0.2,
-						delay: i * 0.04,
+						duration: 0.15,
+						delay: i * 0.025,
 					}}
 					className="
 						border border-neutral-200

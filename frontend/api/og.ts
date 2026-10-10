@@ -77,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let title       = 'Pay your share — Chop'
   let description = 'Someone sent you a Chop link. Open it to pay your share instantly — no app download needed.'
-  const imageUrl  = `${SITE_URL}/og-image.png`
+  const imageUrl  = `${SITE_URL}/og-image.webp`
   const pageUrl   = `${SITE_URL}/s/${slug}`
 
   try {
