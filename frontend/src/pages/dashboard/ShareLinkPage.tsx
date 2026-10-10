@@ -26,7 +26,7 @@ export default function ShareLinkPage() {
   const slug     = state?.slug ?? ''
   const title    = state?.title ?? 'My Chop'
   const shareUrl = slug ? payUrl(slug) : ''
-  const waMessage = `Hey! Settle your share for "${title}" on Chop 👉 ${shareUrl}`
+  const defaultMsg = `Hey! Settle your share for "${title}" on Chop 👉 ${shareUrl}`
   // Computed once on mount — the timestamp shown in the WhatsApp preview bubble
   const msgTimestamp = useMemo(
     () => new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true }),
@@ -35,6 +35,12 @@ export default function ShareLinkPage() {
 
   const [copied,      setCopied]      = useState(false)
   const [copiedCode,  setCopiedCode]  = useState(false)
+  const [customNote,  setCustomNote]  = useState('')
+
+  // Final message sent to WhatsApp — custom note prepended if provided
+  const waMessage = customNote.trim()
+    ? `${customNote.trim()}\n\n${defaultMsg}`
+    : defaultMsg
 
   function handleCopy() {
     if (!shareUrl) return
@@ -114,6 +120,21 @@ export default function ShareLinkPage() {
             </button>
           </div>
 
+          {/* Optional personal note */}
+          <div className="mb-3">
+            <label className="block text-[12px] font-semibold text-neutral-500 mb-1.5">
+              Add a personal note <span className="font-normal text-neutral-400">(optional)</span>
+            </label>
+            <textarea
+              value={customNote}
+              onChange={e => setCustomNote(e.target.value)}
+              placeholder={`e.g. "Guys, please pay before Friday 🙏"`}
+              rows={2}
+              maxLength={200}
+              className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-[13px] text-neutral-800 placeholder:text-neutral-300 resize-none focus:outline-none focus:border-neutral-400 transition-colors"
+            />
+          </div>
+
           {/* WhatsApp button — <a> tag guarantees the browser treats it as a navigation, not a popup */}
           <a
             href={`https://wa.me/?text=${encodeURIComponent(waMessage)}`}
@@ -143,6 +164,12 @@ export default function ShareLinkPage() {
                 className="rounded-2xl rounded-br-none px-3.5 py-2.5"
                 style={{ background: '#dcf8c6' }}
               >
+                {/* Custom note shown above default message if provided */}
+                {customNote.trim() && (
+                  <p className="text-[13px] text-neutral-800 leading-snug mb-1">
+                    {customNote.trim()}
+                  </p>
+                )}
                 <p className="text-[13px] text-neutral-800 leading-snug">
                   Hey! Settle your share for &ldquo;{title}&rdquo; on Chop 👉{' '}
                   <span className="text-[#025d9e] underline">{shareUrl}</span>
