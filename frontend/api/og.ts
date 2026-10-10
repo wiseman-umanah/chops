@@ -47,6 +47,11 @@ async function fetchSession(slug: string) {
   } | null
 }
 
+function readIndex(): string {
+  const indexPath = join(process.cwd(), 'dist', 'index.html')
+  return readFileSync(indexPath, 'utf-8')
+}
+
 /** Strip any existing og/twitter/title/description meta from the SPA index.html */
 function stripExistingMeta(html: string) {
   return html
@@ -55,17 +60,14 @@ function stripExistingMeta(html: string) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // req.query.slug is populated by vercel.json route capture
-  const slug = (req.query.slug as string) ?? ''
+  // req.query.slug is populated by vercel.json route capture (empty string for root/generic path)
+  const slug = (req.query.slug as string | undefined) ?? ''
 
-  // Only intercept crawlers — real users get SPA as usual
+  // Non-crawlers: serve the SPA shell as-is
   const ua = req.headers['user-agent'] ?? ''
   if (!CRAWLER_RE.test(ua)) {
-    // Serve the normal SPA (Vercel will handle this via the main rewrite)
-    // But we're in a function now, so manually read and serve index.html
     try {
-      const indexPath = join(process.cwd(), 'dist', 'index.html')
-      const html = readFileSync(indexPath, 'utf-8')
+      const html = readIndex()
       res.setHeader('Content-Type', 'text/html; charset=utf-8')
       return res.status(200).send(html)
     } catch {
@@ -73,39 +75,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // ── Crawler path: inject dynamic OG tags ──────────────────────────────────
+  // ── Crawler path: build OG tags ───────────────────────────────────────────
 
-  let title       = 'Pay your share — Chop'
-  let description = 'Someone sent you a Chop link. Open it to pay your share instantly — no app download needed.'
-  const imageUrl  = `${SITE_URL}/og-image.webp`
-  const pageUrl   = `${SITE_URL}/s/${slug}`
+  const imageUrl = `${SITE_URL}/og-image.webp`
 
-  try {
-    const session = await fetchSession(slug)
-    if (session) {
-      const modeLabel   = MODE_LABEL[session.mode] ?? 'Chop'
-      const participantCount = session.participants?.length ?? 0
-      const amount      = formatNaira(session.totalKobo ?? 0)
-      title       = `Pay your share — ${session.title}`
-      description = `${modeLabel} · ${amount} split across ${participantCount} ${participantCount === 1 ? 'person' : 'people'}. Open the link to pay your share on Chop — no app download needed.`
+  let title       = 'Chop — Split Bills & Pool Funds via WhatsApp'
+  let description = 'No app download. No awkward money talk. Create a Chop session, share the link on WhatsApp, and let everyone settle their share instantly.'
+  let pageUrl     = SITE_URL
+
+  if (slug) {
+    // Session-specific page — fetch live data
+    title       = 'Pay your share — Chop'
+    description = 'Someone sent you a Chop link. Open it to pay your share instantly — no app download needed.'
+    pageUrl     = `${SITE_URL}/s/${slug}`
+
+    try {
+      const session = await fetchSession(slug)
+      if (session) {
+        const modeLabel        = MODE_LABEL[session.mode] ?? 'Chop'
+        const participantCount = session.participants?.length ?? 0
+        const amount           = formatNaira(session.totalKobo ?? 0)
+        title       = `Pay your share — ${session.title}`
+        description = `${modeLabel} · ${amount} split across ${participantCount} ${participantCount === 1 ? 'person' : 'people'}. Open the link to pay your share on Chop — no app download needed.`
+      }
+    } catch {
+      // fallback to generic session tags above
     }
-  } catch {
-    // fallback to generic tags above
   }
 
   const ogMeta = `
     <title>${title}</title>
     <meta name="description" content="${description}" />
     <link rel="canonical" href="${pageUrl}" />
-    <meta property="og:type"        content="website" />
-    <meta property="og:url"         content="${pageUrl}" />
-    <meta property="og:title"       content="${title}" />
-    <meta property="og:description" content="${description}" />
-    <meta property="og:image"       content="${imageUrl}" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:site_name"   content="Chop" />
-    <meta property="og:locale"      content="en_NG" />
+    <meta property="og:type"         content="website" />
+    <meta property="og:url"          content="${pageUrl}" />
+    <meta property="og:title"        content="${title}" />
+    <meta property="og:description"  content="${description}" />
+    <meta property="og:image"        content="${imageUrl}" />
+    <meta property="og:image:width"  content="800" />
+    <meta property="og:image:height" content="452" />
+    <meta property="og:site_name"    content="Chop" />
+    <meta property="og:locale"       content="en_NG" />
     <meta name="twitter:card"        content="summary_large_image" />
     <meta name="twitter:url"         content="${pageUrl}" />
     <meta name="twitter:title"       content="${title}" />
@@ -114,17 +124,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   `
 
   try {
-    const indexPath = join(process.cwd(), 'dist', 'index.html')
-    let html = readFileSync(indexPath, 'utf-8')
+    let html = readIndex()
     html = stripExistingMeta(html)
-    // Inject right before </head>
     html = html.replace('</head>', `${ogMeta}\n</head>`)
     res.setHeader('Content-Type', 'text/html; charset=utf-8')
-    // Cache 10 min at CDN, 60 s stale-while-revalidate
     res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=60')
     return res.status(200).send(html)
   } catch {
-    // Fallback: bare minimal shell with OG tags
-    return res.status(200).send(`<!doctype html><html lang="en"><head><meta charset="UTF-8"/>${ogMeta}</head><body><div id="root"></div></body></html>`)
+    return res.status(200).send(
+      `<!doctype html><html lang="en"><head><meta charset="UTF-8"/>${ogMeta}</head><body><div id="root"></div></body></html>`
+    )
   }
 }

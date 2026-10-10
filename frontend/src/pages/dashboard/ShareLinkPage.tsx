@@ -99,9 +99,11 @@ export default function ShareLinkPage() {
 
           {/* URL + copy button */}
           <div className="flex items-start sm:items-center flex-col sm:flex-row gap-3 mb-4">
-            <div className="flex-1 border border-neutral-200 rounded-full px-4 py-2.5 overflow-hidden">
-              <p className="text-[13px] text-neutral-400 truncate underline">{shareUrl}</p>
-            </div>
+            <div className="flex-1 min-w-0 w-full border border-neutral-200 rounded-full px-4 py-2.5 overflow-x-auto">
+				<p className="text-[13px] text-neutral-400 underline whitespace-nowrap">
+				{shareUrl}
+				</p>
+			</div>
             <button
               onClick={handleCopy}
               className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] text-white transition-opacity hover:opacity-90"
