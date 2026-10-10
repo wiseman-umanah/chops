@@ -19,6 +19,22 @@ export default defineSchema({
     // Extra fields from signup form
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
+    /**
+     * Trust & Safety fields.
+     *
+     * accountStatus:
+     *   "active"       — normal, can create sessions and accept payments
+     *   "under_review" — flagged for suspicious early-close pattern; payments blocked
+     *   "suspended"    — manually suspended by admin
+     *
+     * earlyCloseCount — number of suspicious early chop-in closes recorded.
+     *   Incremented when organizer closes a chop-in with < 50% of goal collected
+     *   AND at least 1 contributor has paid. Auto-suspends at 5.
+     */
+    accountStatus: v.optional(
+      v.union(v.literal("active"), v.literal("under_review"), v.literal("suspended"))
+    ),
+    earlyCloseCount: v.optional(v.number()),
   })
     .index("email", ["email"])
     .index("phone", ["phone"]),
@@ -89,7 +105,11 @@ export default defineSchema({
     contributionAmount: v.optional(v.number()),
     /** Set by Bachs webhook after successful payment */
     paymentRef: v.optional(v.string()),
-  }).index("by_session", ["sessionId"]),
+    /** Optional payer email — used to send a payment confirmation email */
+    payerEmail: v.optional(v.string()),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_payment_ref", ["paymentRef"]),
 
   /**
    * In-app notifications for session organizers.

@@ -1,6 +1,6 @@
 import RemixIcon from '@/components/RemixIcon'
 import { Seo } from '@/hooks/useSeo'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
@@ -40,11 +40,19 @@ function formatNaira(n: number) {
 const inputCls =
   'w-full border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:border-[#FB2C36] transition-colors bg-white'
 
+const inputErrCls =
+  'w-full border border-red-400 rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:border-[#FB2C36] transition-colors bg-white'
+
 const SPLITS: { key: SplitType; label: string }[] = [
   { key: 'equal', label: 'Equal' },
   { key: 'custom', label: 'Custom' },
   { key: 'percentage', label: 'Percentage' },
 ]
+
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null
+  return <p className="text-[12px] text-red-500 mt-1.5 px-1">{msg}</p>
+}
 
 function SplitToggle({
   value,
@@ -152,7 +160,6 @@ function prefillParticipants(es: EditSession, splitType: SplitType): Participant
   return es.participants.map(p => ({
     id: uid(),
     name: p.name,
-    // custom: show naira amount minus the fee (amountOwed includes fee — approximate)
     customAmount: splitType === 'custom' ? String(Math.round(p.amountOwed / 100)) : '',
     percent: splitType === 'percentage' ? String(p.sharePercent ?? '') : '',
   }))
@@ -176,7 +183,6 @@ export default function ChopBillPage() {
   const [totalRaw, setTotalRaw]   = useState(
     isEditMode ? String(Math.round(editSession.totalAmount / 100)) : ''
   )
-  // In edit mode, split type is locked to what was originally chosen
   const [splitType, setSplitType] = useState<SplitType>(resolvedSplitType)
   const [participants, setParticipants] = useState<Participant[]>(
     isEditMode
@@ -185,6 +191,14 @@ export default function ChopBillPage() {
   )
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState<string | null>(null)
+
+  // Per-field error state — only shown after first submit attempt
+  const [submitted, setSubmitted] = useState(false)
+
+  // Refs for scroll-to-error
+  const titleRef        = useRef<HTMLDivElement>(null)
+  const totalRef        = useRef<HTMLDivElement>(null)
+  const participantsRef = useRef<HTMLDivElement>(null)
 
   const totalNaira = parseInt(totalRaw.replace(/\D/g, ''), 10) || 0
   const totalKobo  = totalNaira * 100
@@ -235,20 +249,48 @@ export default function ChopBillPage() {
     setParticipants(prev => prev.filter(p => p.id !== id))
   }
 
-  function validate(): string | null {
-    if (!title.trim()) return 'Session title is required'
-    if (totalNaira <= 0) return 'Total amount must be greater than 0'
-    if (participants.some(p => !p.name.trim())) return 'All participants must have a name'
-    if (splitType === 'percentage' && Math.abs(pctSum - 100) > 0.01)
-      return `Percentages must sum to 100 (currently ${pctSum.toFixed(1)}%)`
-    if (splitType === 'custom' && Math.abs(customSum - totalKobo) > 1)
-      return `Custom amounts must sum to ₦${totalNaira.toLocaleString()} (currently ₦${Math.round(customSum / 100).toLocaleString()})`
-    return null
-  }
+  // ── Derived field-level errors (only visible after first submit) ──────────
+  const titleErr       = submitted && !title.trim() ? 'Session title is required' : undefined
+  const totalErr       = submitted && totalNaira <= 0 ? 'Total bill amount is required' : undefined
+  const participantErr = submitted && participants.some(p => !p.name.trim())
+    ? 'All participants must have a name'
+    : undefined
+  const pctErr = submitted && splitType === 'percentage' && Math.abs(pctSum - 100) > 0.01
+    ? `Percentages must sum to 100 (currently ${pctSum.toFixed(1)}%)`
+    : undefined
+  const customErr = submitted && splitType === 'custom' && Math.abs(customSum - totalKobo) > 1
+    ? `Custom amounts must sum to ₦${totalNaira.toLocaleString()} (currently ₦${Math.round(customSum / 100).toLocaleString()})`
+    : undefined
+
+  // Button is disabled until required fields are filled
+  const canSubmit = title.trim() && totalNaira > 0 && participants.every(p => p.name.trim())
 
   async function handleSubmit() {
-    const err = validate()
-    if (err) { setError(err); return }
+    setSubmitted(true)
+
+    if (!title.trim()) {
+      titleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (totalNaira <= 0) {
+      totalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (participants.some(p => !p.name.trim())) {
+      participantsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (splitType === 'percentage' && Math.abs(pctSum - 100) > 0.01) {
+      participantsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setError(`Percentages must sum to 100 (currently ${pctSum.toFixed(1)}%)`)
+      return
+    }
+    if (splitType === 'custom' && Math.abs(customSum - totalKobo) > 1) {
+      participantsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setError(`Custom amounts must sum to ₦${totalNaira.toLocaleString()} (currently ₦${Math.round(customSum / 100).toLocaleString()})`)
+      return
+    }
+
     setError(null)
     setLoading(true)
     try {
@@ -308,26 +350,33 @@ export default function ChopBillPage() {
         {/* ── Left column ────────────────────────────────────────────────── */}
         <div className="w-full lg:w-[60%] min-w-0 flex flex-col gap-4">
 
-          <div className="border border-neutral-200 rounded-2xl p-6">
+          {/* Session title */}
+          <div ref={titleRef} className="border border-neutral-200 rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-4">
               <RemixIcon name="ri-coupon-5-line" size={20} color={BRAND} />
               <span className="text-[14px] font-bold text-neutral-700">
                 {isEditMode ? 'Edit Chop Bill' : 'Chop Bill'}
               </span>
             </div>
-            <label className="block text-[13px] font-bold text-neutral-800 mb-1.5">Session Title</label>
+            <label className="block text-[13px] font-bold text-neutral-800 mb-1.5">
+              Session Title <span className="text-red-500">*</span>
+            </label>
             <input
-              className={inputCls}
+              className={titleErr ? inputErrCls : inputCls}
               placeholder="e.g. Lagos trip expenses"
               value={title}
               onChange={e => setTitle(e.target.value)}
             />
+            <FieldError msg={titleErr} />
           </div>
 
-          <div className="border border-neutral-200 rounded-2xl p-6">
-            <h3 className="text-[15px] font-bold text-neutral-900 mb-4">Total Bill Amount (₦)</h3>
+          {/* Total bill */}
+          <div ref={totalRef} className="border border-neutral-200 rounded-2xl p-6">
+            <h3 className="text-[15px] font-bold text-neutral-900 mb-4">
+              Total Bill Amount (₦) <span className="text-red-500">*</span>
+            </h3>
             <input
-              className={inputCls}
+              className={totalErr ? inputErrCls : inputCls}
               inputMode="numeric"
               placeholder="e.g. 120000"
               value={totalRaw}
@@ -336,11 +385,12 @@ export default function ChopBillPage() {
                 setTotalRaw(raw)
               }}
             />
+            <FieldError msg={totalErr} />
           </div>
 
+          {/* Split type */}
           <div className="border border-neutral-200 rounded-2xl p-6">
             <h3 className="text-[15px] font-bold text-neutral-900 mb-4">Split Type</h3>
-            {/* Lock split type in edit mode — changing it would invalidate stored participant data */}
             <SplitToggle
               value={splitType}
               onChange={t => { setSplitType(t); setError(null) }}
@@ -358,9 +408,12 @@ export default function ChopBillPage() {
             )}
           </div>
 
-          <div className="border border-neutral-200 rounded-2xl p-6">
+          {/* Participants */}
+          <div ref={participantsRef} className="border border-neutral-200 rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[15px] font-bold text-neutral-900">Participants</h3>
+              <h3 className="text-[15px] font-bold text-neutral-900">
+                Participants <span className="text-red-500">*</span>
+              </h3>
               {splitType === 'percentage' && (
                 <span
                   className="text-[12px] font-semibold px-3 py-1 rounded-full"
@@ -398,6 +451,7 @@ export default function ChopBillPage() {
                 />
               ))}
             </div>
+            <FieldError msg={participantErr ?? pctErr ?? customErr} />
 
             <button
               type="button"
@@ -446,21 +500,29 @@ export default function ChopBillPage() {
                 <span className="font-semibold">Total Bill</span>
                 <span className="font-semibold">{formatNaira(totalNaira)}</span>
               </div>
-              {totalKobo > 0 && (
+              {totalKobo > 0 && count > 0 && (
                 <div className="flex justify-between text-white/70 text-[13px]">
-                  <span>Platform fee / person</span>
-                  <span>{formatNaira(Math.round(feePerParticipant / 100))}</span>
+                  <span>+ Platform fee (split across participants)</span>
+                  <span>+{formatNaira(Math.round(feePerParticipant / 100))}</span>
                 </div>
               )}
-              <div className="flex justify-between text-[15px] font-bold mt-1">
-                <span>Participants</span>
-                <span>{count}</span>
-              </div>
+              {totalKobo > 0 && count > 0 && (
+                <div className="flex justify-between text-[15px] font-bold mt-1 border-t border-white/20 pt-2">
+                  <span>Each person pays</span>
+                  <span>{formatNaira(Math.round((totalKobo / count + feePerParticipant) / 100))}</span>
+                </div>
+              )}
+              {!(totalKobo > 0 && count > 0) && (
+                <div className="flex justify-between text-[15px] font-bold mt-1">
+                  <span>Participants</span>
+                  <span>{count}</span>
+                </div>
+              )}
             </div>
 
             <button
               onClick={handleSubmit}
-              disabled={!title.trim() || totalNaira === 0 || loading}
+              disabled={(!canSubmit && !submitted) || loading}
               className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full text-[14px] font-bold bg-white transition-opacity hover:opacity-90 disabled:opacity-40"
               style={{ color: BRAND }}
             >

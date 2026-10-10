@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import type { Id } from "./_generated/dataModel";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fee logic
@@ -211,7 +212,12 @@ export const createSession = mutation({
         type FoodP = { name: string; items: { name: string; price: number }[] };
         const fp = p as FoodP;
         const itemsTotal = fp.items.reduce((s, item) => s + item.price, 0);
-        const taxTipRatio = totalAmount > 0 ? ((taxKobo ?? 0) + (tipKobo ?? 0)) / totalAmount : 0;
+        // Denominator must be the items subtotal (gross minus tax+tip), not the gross total.
+        // Using gross causes each participant's pro-rata tax to sum to less than the actual
+        // tax+tip — the organizer collects less than the session total on every food split.
+        const taxTip = (taxKobo ?? 0) + (tipKobo ?? 0);
+        const itemsSubtotal = totalAmount - taxTip;
+        const taxTipRatio = itemsSubtotal > 0 ? taxTip / itemsSubtotal : 0;
         const share = Math.round(itemsTotal * (1 + taxTipRatio));
         const amountOwed = share + (feePerParticipant ?? 0);
         await ctx.db.insert("participants", {
@@ -307,6 +313,42 @@ export const editSession = mutation({
 
     // If participants array is supplied, replace them entirely
     if (participants !== undefined) {
+      const newTotal = totalAmount ?? session.totalAmount;
+      const newTax   = taxKobo ?? session.taxKobo ?? 0;
+      const newTip   = tipKobo ?? session.tipKobo ?? 0;
+      const mode     = session.mode;
+
+      // ── Same validations as createSession ──────────────────────────────────
+
+      if (mode === "food") {
+        const invalid = (participants as { items?: unknown[] }[]).some(
+          (p) => !p.items || (p.items as unknown[]).length === 0
+        );
+        if (invalid) throw new Error("Each participant must have at least one menu item");
+      }
+
+      if (mode === "bill") {
+        if (session.splitType === "percentage") {
+          const pctTotal = (participants as { sharePercent: number }[]).reduce(
+            (sum, p) => sum + (p.sharePercent ?? 0),
+            0
+          );
+          if (Math.abs(pctTotal - 100) > 0.01) {
+            throw new Error("Percentages must add up to 100");
+          }
+        }
+        if (session.splitType === "custom") {
+          const sum = (participants as { amountOwed: number }[]).reduce(
+            (s, p) => s + (p.amountOwed ?? 0),
+            0
+          );
+          if (Math.abs(sum - newTotal) > 1) {
+            throw new Error("Custom amounts must add up to the total bill");
+          }
+        }
+      }
+
+      // ── Delete existing participants ─────────────────────────────────────────
       const existing = await ctx.db
         .query("participants")
         .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
@@ -315,19 +357,18 @@ export const editSession = mutation({
         await ctx.db.delete(ep._id);
       }
 
-      const newTotal = totalAmount ?? session.totalAmount;
       const newFee = computeFlatFeePerParticipant(newTotal, participants.length);
       await ctx.db.patch(sessionId, { feePerParticipant: newFee });
 
       for (const p of participants) {
-        const mode = session.mode;
         if (mode === "food") {
           type FoodP = { name: string; items: { name: string; price: number }[] };
           const fp = p as FoodP;
-          const newTax = taxKobo ?? session.taxKobo ?? 0;
-          const newTip = tipKobo ?? session.tipKobo ?? 0;
           const itemsTotal = fp.items.reduce((s: number, item: { price: number }) => s + item.price, 0);
-          const taxTipRatio = newTotal > 0 ? (newTax + newTip) / newTotal : 0;
+          // Use itemsSubtotal (gross minus tax+tip) as denominator — same fix as createSession.
+          const taxTip = newTax + newTip;
+          const itemsSubtotal = newTotal - taxTip;
+          const taxTipRatio = itemsSubtotal > 0 ? taxTip / itemsSubtotal : 0;
           const share = Math.round(itemsTotal * (1 + taxTipRatio));
           await ctx.db.insert("participants", {
             sessionId,
@@ -409,6 +450,16 @@ export const deleteSession = mutation({
 // closeSession
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Closes a session. For chop-in sessions, also runs the fraud-detection
+ * early-close check:
+ *
+ *   Suspicious = collected < 50% of goal AND at least 1 contributor paid
+ *
+ * Each suspicious close increments earlyCloseCount on the organizer.
+ * At 5 strikes the account is set to "under_review" and their active sessions
+ * stop accepting new payments.
+ */
 export const closeSession = mutation({
   args: { sessionId: v.id("sessions") },
   handler: async (ctx, { sessionId }) => {
@@ -420,6 +471,72 @@ export const closeSession = mutation({
     if (session.organizerId !== userId) throw new Error("Not your session");
 
     await ctx.db.patch(sessionId, { status: "closed" });
+
+    // ── Fraud detection (chop-in only) ──────────────────────────────────────
+    if (session.mode === "chop-in") {
+      const participants = await ctx.db
+        .query("participants")
+        .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+        .collect();
+
+      const paidParticipants = participants.filter((p) => p.status === "sent");
+      const collected = paidParticipants.reduce((s, p) => s + p.amountOwed, 0);
+      const goal = session.goalAmount ?? session.totalAmount;
+
+      // Suspicious: at least 1 paid contributor AND collected < 50% of goal
+      const isSuspicious =
+        paidParticipants.length > 0 &&
+        goal > 0 &&
+        collected / goal < 0.5;
+
+      if (isSuspicious) {
+        // userId is a Convex Id<"users"> — cast so we can read/patch the users table
+        const organizerRow = await ctx.db.get(userId as Id<"users">);
+        if (organizerRow) {
+          const currentCount = (organizerRow.earlyCloseCount as number | undefined) ?? 0;
+          const newCount = currentCount + 1;
+          const currentStatus = (organizerRow.accountStatus as string | undefined) ?? "active";
+
+          // Never downgrade a more severe status. Severity: active < under_review < suspended.
+          // Only escalate to under_review when hitting 5 strikes AND not already at a worse level.
+          const shouldEscalate =
+            newCount >= 5 &&
+            currentStatus !== "under_review" &&
+            currentStatus !== "suspended";
+
+          if (shouldEscalate) {
+            await ctx.db.patch(userId as Id<"users">, {
+              earlyCloseCount: newCount,
+              accountStatus: "under_review" as const,
+            });
+          } else {
+            // Increment counter only — leave accountStatus untouched
+            await ctx.db.patch(userId as Id<"users">, {
+              earlyCloseCount: newCount,
+            });
+          }
+
+          console.log(
+            `[fraud] User ${userId} early-close strike ${newCount}/5` +
+              (shouldEscalate ? " — account set to under_review" : "")
+          );
+        }
+      }
+    }
+  },
+});
+
+/**
+ * Returns the accountStatus of a user by their Convex user ID.
+ * Internal-only — called by initiateCheckout before creating a Bachs session.
+ * Keeping this internal prevents external probing of user suspension status.
+ */
+export const getOrganizerStatus = internalQuery({
+  args: { organizerId: v.string() },
+  handler: async (ctx, { organizerId }) => {
+    const user = await ctx.db.get(organizerId as Id<"users">);
+    if (!user) return "active" as const;
+    return ((user as { accountStatus?: string }).accountStatus ?? "active") as string;
   },
 });
 
@@ -455,6 +572,19 @@ export const setSessionStatus = internalMutation({
 
 // ─────────────────────────────────────────────────────────────────────────────
 // getSessionBySlug — public (no auth required)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Fetches a single session by its Convex ID.
+ * Internal-only — used by the webhook email action and initiateCheckout.
+ */
+export const getSessionById = internalQuery({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, { sessionId }) => {
+    return ctx.db.get(sessionId);
+  },
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const getSessionBySlug = query({
@@ -507,13 +637,16 @@ export const getOrganizerSessions = query({
           .query("participants")
           .withIndex("by_session", (q) => q.eq("sessionId", session._id))
           .collect();
+        const fee = session.feePerParticipant ?? 0;
         const paidCount = participants.filter((p) => p.status === "sent").length;
+        // Subtract the platform fee so amounts reflect what the organizer receives,
+        // not the gross collected from payers (used in dashboard cards + payout modal).
         const paidAmount = participants
           .filter((p) => p.status === "sent")
-          .reduce((s, p) => s + p.amountOwed, 0);
+          .reduce((s, p) => s + p.amountOwed - fee, 0);
         const pendingAmount = participants
           .filter((p) => p.status === "pending")
-          .reduce((s, p) => s + p.amountOwed, 0);
+          .reduce((s, p) => s + p.amountOwed - fee, 0);
         // A session with 0 payments and status=active can be edited/deleted
         const canEdit = session.status === "active" && paidCount === 0;
 
@@ -557,11 +690,14 @@ export const getSessionStats = query({
         .withIndex("by_session", (q) => q.eq("sessionId", session._id))
         .collect();
 
+      const fee = session.feePerParticipant ?? 0;
       for (const p of participants) {
         if (p.status === "sent") {
-          settledKobo += p.amountOwed;
+          // Subtract the platform fee so settledKobo reflects what the organizer
+          // actually receives, not the gross amount collected from payers.
+          settledKobo += p.amountOwed - fee;
         } else {
-          pendingKobo += p.amountOwed;
+          pendingKobo += p.amountOwed - fee;
         }
       }
     }

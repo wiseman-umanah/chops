@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import RemixIcon from '@/components/RemixIcon'
 import { QRCodeSVG } from 'qrcode.react'
 import { Seo } from '@/hooks/useSeo'
@@ -26,9 +26,21 @@ export default function ShareLinkPage() {
   const slug     = state?.slug ?? ''
   const title    = state?.title ?? 'My Chop'
   const shareUrl = slug ? payUrl(slug) : ''
-  const waMessage = `Hey! Settle your share for "${title}" on Chop 👉 ${shareUrl}`
+  const defaultMsg = `Hey! Settle your share for "${title}" on Chop 👉 ${shareUrl}`
+  // Computed once on mount — the timestamp shown in the WhatsApp preview bubble
+  const msgTimestamp = useMemo(
+    () => new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    []
+  )
 
-  const [copied, setCopied] = useState(false)
+  const [copied,      setCopied]      = useState(false)
+  const [copiedCode,  setCopiedCode]  = useState(false)
+  const [customNote,  setCustomNote]  = useState('')
+
+  // Final message sent to WhatsApp — custom note prepended if provided
+  const waMessage = customNote.trim()
+    ? `${customNote.trim()}\n\n${defaultMsg}`
+    : defaultMsg
 
   function handleCopy() {
     if (!shareUrl) return
@@ -37,9 +49,13 @@ export default function ShareLinkPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  function handleWhatsApp() {
-    window.open(`https://wa.me/?text=${encodeURIComponent(waMessage)}`, '_blank')
+  function handleCopyCode() {
+    if (!slug) return
+    navigator.clipboard.writeText(slug).catch(() => {})
+    setCopiedCode(true)
+    setTimeout(() => setCopiedCode(false), 2000)
   }
+
 
   return (
     <div className="max-w-[800px] mx-auto">
@@ -70,14 +86,30 @@ export default function ShareLinkPage() {
           <h2 className="text-[20px] font-bold text-neutral-900 mb-1">{title}</h2>
 
           {slug && (
-            <p className="text-[12px] text-neutral-400 font-mono mb-5">{slug}</p>
+            <div className="flex items-center gap-2 mb-5">
+              <p className="text-[12px] text-neutral-400 font-mono">{slug}</p>
+              <button
+                onClick={handleCopyCode}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors border"
+                style={copiedCode
+                  ? { background: '#dcfce7', color: '#166534', borderColor: '#bbf7d0' }
+                  : { background: '#f5f5f5', color: '#6b7280', borderColor: '#e5e7eb' }
+                }
+                title="Copy session code"
+              >
+                <RemixIcon name={copiedCode ? 'ri-check-line' : 'ri-file-copy-line'} size={11} color={copiedCode ? '#16a34a' : '#6b7280'} />
+                {copiedCode ? 'Copied!' : 'Copy code'}
+              </button>
+            </div>
           )}
 
           {/* URL + copy button */}
           <div className="flex items-start sm:items-center flex-col sm:flex-row gap-3 mb-4">
-            <div className="flex-1 border border-neutral-200 rounded-full px-4 py-2.5 overflow-hidden">
-              <p className="text-[13px] text-neutral-400 truncate underline">{shareUrl}</p>
-            </div>
+            <div className="flex-1 min-w-0 w-full border border-neutral-200 rounded-full px-4 py-2.5 overflow-x-auto">
+				<p className="text-[13px] text-neutral-400 underline whitespace-nowrap">
+				{shareUrl}
+				</p>
+			</div>
             <button
               onClick={handleCopy}
               className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] text-white transition-opacity hover:opacity-90"
@@ -88,15 +120,32 @@ export default function ShareLinkPage() {
             </button>
           </div>
 
-          {/* WhatsApp button */}
-          <button
-            onClick={handleWhatsApp}
+          {/* Optional personal note */}
+          <div className="mb-3">
+            <label className="block text-[12px] font-semibold text-neutral-500 mb-1.5">
+              Add a personal note <span className="font-normal text-neutral-400">(optional)</span>
+            </label>
+            <textarea
+              value={customNote}
+              onChange={e => setCustomNote(e.target.value)}
+              placeholder={`e.g. "Guys, please pay before Friday 🙏"`}
+              rows={2}
+              maxLength={200}
+              className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-[13px] text-neutral-800 placeholder:text-neutral-300 resize-none focus:outline-none focus:border-neutral-400 transition-colors"
+            />
+          </div>
+
+          {/* WhatsApp button — <a> tag guarantees the browser treats it as a navigation, not a popup */}
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(waMessage)}`}
+            target="_blank"
+            rel="noopener noreferrer"
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full text-[14px] text-white transition-opacity hover:opacity-90"
             style={{ background: WHATSAPP_GREEN }}
           >
             <RemixIcon name="ri-whatsapp-line" />
             Share directly on WhatsApp
-          </button>
+          </a>
         </div>
 
         {/* ── WhatsApp preview ──────────────────────────────────────────── */}
@@ -115,6 +164,12 @@ export default function ShareLinkPage() {
                 className="rounded-2xl rounded-br-none px-3.5 py-2.5"
                 style={{ background: '#dcf8c6' }}
               >
+                {/* Custom note shown above default message if provided */}
+                {customNote.trim() && (
+                  <p className="text-[13px] text-neutral-800 leading-snug mb-1">
+                    {customNote.trim()}
+                  </p>
+                )}
                 <p className="text-[13px] text-neutral-800 leading-snug">
                   Hey! Settle your share for &ldquo;{title}&rdquo; on Chop 👉{' '}
                   <span className="text-[#025d9e] underline">{shareUrl}</span>
@@ -125,10 +180,10 @@ export default function ShareLinkPage() {
                   className="mt-2 rounded-xl overflow-hidden border border-black/10"
                   style={{ background: '#fff' }}
                 >
-                  {/* OG image */}
+                  {/* OG image preview — small WebP, the full og-image.png is only for crawlers */}
                   <div className="w-full overflow-hidden" style={{ height: 140 }}>
                     <img
-                      src="/og-image.png"
+                      src="/og-image.webp"
                       alt="Chop link preview"
                       className="w-full h-full object-cover object-top"
                     />
@@ -150,7 +205,7 @@ export default function ShareLinkPage() {
                 {/* Timestamp + ticks */}
                 <div className="flex justify-end items-center gap-1 mt-1">
                   <span className="text-[10px] text-neutral-400">
-                    {new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                    {msgTimestamp}
                   </span>
                   <svg width="16" height="11" viewBox="0 0 16 11" fill="none">
                     <path d="M1 5.5L4.5 9L10 3" stroke="#53bdeb" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>

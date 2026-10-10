@@ -298,9 +298,16 @@ export default function OverviewPage() {
   const { user }  = useAuth()
   const navigate  = useNavigate()
 
-  const [filter, setFilter]           = useState<StatusFilter>('all')
-  const [deletingId, setDeletingId]   = useState<Id<'sessions'> | null>(null)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [filter, setFilter]              = useState<StatusFilter>('all')
+  const [deletingId, setDeletingId]      = useState<Id<'sessions'> | null>(null)
+  const [deleteError, setDeleteError]    = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<Id<'sessions'> | null>(null)
+  const confirmTimerRef                  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [confirmCloseId, setConfirmCloseId]   = useState<Id<'sessions'> | null>(null)
+  const confirmCloseTimerRef             = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [closingId, setClosingId]        = useState<Id<'sessions'> | null>(null)
+  const [closeError, setCloseError]      = useState<string | null>(null)
+  const [copiedSlug, setCopiedSlug]      = useState<string | null>(null)
   const [finalizeSession, setFinalizeSession] = useState<Session | null>(null)
   const [joinOpen, setJoinOpen]               = useState(false)
 
@@ -310,7 +317,8 @@ export default function OverviewPage() {
     filter === 'all' ? {} : { status: filter },
   )
 
-  const deleteSession = useMutation(api.sessions.deleteSession)
+  const deleteSession  = useMutation(api.sessions.deleteSession)
+  const closeSessionFn = useMutation(api.sessions.closeSession)
 
   const activeChops = stats?.activeChops ?? 0
   const pendingKobo = stats?.pendingKobo ?? 0
@@ -369,7 +377,15 @@ const STATS = [
   },
 ]
 
-  async function handleDelete(sessionId: Id<'sessions'>) {
+  function requestDelete(sessionId: Id<'sessions'>) {
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+    setConfirmDeleteId(sessionId)
+    confirmTimerRef.current = setTimeout(() => setConfirmDeleteId(null), 4000)
+  }
+
+  async function confirmDelete(sessionId: Id<'sessions'>) {
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+    setConfirmDeleteId(null)
     setDeletingId(sessionId)
     setDeleteError(null)
     try {
@@ -378,6 +394,26 @@ const STATS = [
       setDeleteError(e instanceof Error ? e.message : 'Could not delete chop')
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  function requestClose(sessionId: Id<'sessions'>) {
+    if (confirmCloseTimerRef.current) clearTimeout(confirmCloseTimerRef.current)
+    setConfirmCloseId(sessionId)
+    confirmCloseTimerRef.current = setTimeout(() => setConfirmCloseId(null), 4000)
+  }
+
+  async function confirmClose(sessionId: Id<'sessions'>) {
+    if (confirmCloseTimerRef.current) clearTimeout(confirmCloseTimerRef.current)
+    setConfirmCloseId(null)
+    setClosingId(sessionId)
+    setCloseError(null)
+    try {
+      await closeSessionFn({ sessionId })
+    } catch (e) {
+      setCloseError(e instanceof Error ? e.message : 'Could not close session')
+    } finally {
+      setClosingId(null)
     }
   }
 
@@ -431,8 +467,8 @@ const STATS = [
 				initial={{ opacity: 0, y: 14 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{
-				duration: 0.3,
-				delay: i * 0.07,
+				duration: 0.2,
+				delay: i * 0.04,
 				ease: 'easeOut',
 				}}
 				className="min-w-0 rounded-2xl py-10 px-6 sm:px-8"
@@ -491,7 +527,7 @@ const STATS = [
             key={action.label}
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 + i * 0.07, ease: 'easeOut' }}
+            transition={{ duration: 0.2, delay: 0.1 + i * 0.04, ease: 'easeOut' }}
             onClick={() => navigate(action.path)}
             className="text-left border border-neutral-200 rounded-2xl p-6 hover:border-neutral-300 hover:shadow-sm transition-all group"
           >
@@ -537,6 +573,12 @@ const STATS = [
           </div>
         )}
 
+        {closeError && (
+          <div className="mb-4 rounded-2xl px-5 py-3 text-[13px] font-medium" style={{ background: '#fff1f2', color: '#be123c' }}>
+            {closeError}
+          </div>
+        )}
+
         {sessions === undefined ? (
           <div className="flex flex-col gap-3">
             {[0, 1, 2].map(i => (
@@ -557,6 +599,7 @@ const STATS = [
 				const isComplete = session.status === 'closed'
 				const isInactive = session.status === 'inactive'
 				const isDeleting = deletingId === session._id
+				const isClosing  = closingId === session._id
 
 				const statusBadge = isActive
 					? {
@@ -583,8 +626,8 @@ const STATS = [
 					animate={{ opacity: 1, y: 0 }}
 					exit={{ opacity: 0, scale: 0.97 }}
 					transition={{
-						duration: 0.2,
-						delay: i * 0.04,
+						duration: 0.15,
+						delay: i * 0.025,
 					}}
 					className="
 						border border-neutral-200
@@ -649,18 +692,34 @@ const STATS = [
 							</span>
 						</div>
 
-						{/* Slug */}
-						<p
+						{/* Slug — tap to copy */}
+						<button
+							type="button"
+							onClick={() => {
+								navigator.clipboard.writeText(session.slug).catch(() => {})
+								setCopiedSlug(session.slug)
+								setTimeout(() => setCopiedSlug(null), 2000)
+							}}
 							className="
-							text-[12px]
-							text-neutral-400
-							font-mono
-							mb-1.5
-							truncate
+								flex items-center gap-1.5
+								text-[12px] font-mono
+								mb-1.5
+								text-neutral-400 hover:text-neutral-600
+								transition-colors
+								group
 							"
+							title="Copy session code"
 						>
-							{session.slug}
-						</p>
+							<span>{session.slug}</span>
+							<RemixIcon
+								name={copiedSlug === session.slug ? 'ri-check-line' : 'ri-file-copy-line'}
+								size={12}
+								color={copiedSlug === session.slug ? '#16a34a' : '#9ca3af'}
+							/>
+							{copiedSlug === session.slug && (
+								<span className="text-[11px] text-green-600 font-sans font-medium">Copied!</span>
+							)}
+						</button>
 
 						{/* Payment details */}
 						<div
@@ -743,7 +802,7 @@ const STATS = [
 						/>
 						</button>
 
-						{/* Finalize */}
+						{/* Finalize (food/bill only — chop-in uses Close instead) */}
 						{isComplete && session.mode !== 'chop-in' && (
 						<button
 							onClick={() => setFinalizeSession(session)}
@@ -773,6 +832,52 @@ const STATS = [
 						</button>
 						)}
 
+						{/* Close — chop-in active sessions only (organizer can close at will) */}
+						{isActive && session.mode === 'chop-in' && (
+						<>
+							{confirmCloseId === session._id ? (
+							<button
+								onClick={() => confirmClose(session._id)}
+								disabled={isClosing}
+								className="
+									flex items-center gap-1 px-2 h-8
+									rounded-full
+									bg-orange-50 text-orange-700
+									text-[11px] font-semibold
+									hover:bg-orange-100
+									transition-colors
+									disabled:opacity-40
+									whitespace-nowrap
+								"
+								title="Confirm close session"
+							>
+								<RemixIcon name="ri-stop-circle-line" size={13} color="#c2410c" />
+								Close it?
+							</button>
+							) : (
+							<button
+								onClick={() => requestClose(session._id)}
+								disabled={isClosing}
+								className="
+									flex items-center gap-1 px-2 h-8
+									rounded-full
+									border border-orange-200
+									text-orange-600
+									text-[11px] font-semibold
+									hover:bg-orange-50
+									transition-colors
+									disabled:opacity-40
+									whitespace-nowrap
+								"
+								title="Close chop-in session"
+							>
+								<RemixIcon name="ri-stop-circle-line" size={13} color="#ea580c" />
+								Close
+							</button>
+							)}
+						</>
+						)}
+
 						{/* Edit + Delete */}
 						{session.canEdit && (
 						<>
@@ -795,26 +900,47 @@ const STATS = [
 							/>
 							</button>
 
+							{confirmDeleteId === session._id ? (
 							<button
-							onClick={() => handleDelete(session._id)}
-							disabled={isDeleting}
-							className="
-								w-8 h-8
-								flex items-center justify-center
-								rounded-full
-								hover:bg-red-50
-								transition-colors
-								disabled:opacity-40
-							"
-							title="Delete"
-							aria-label="Delete session"
+								onClick={() => confirmDelete(session._id)}
+								disabled={isDeleting}
+								className="
+									flex items-center gap-1 px-2 h-8
+									rounded-full
+									bg-red-50 text-red-600
+									text-[11px] font-semibold
+									hover:bg-red-100
+									transition-colors
+									disabled:opacity-40
+								"
+								title="Confirm delete"
+								aria-label="Confirm delete session"
 							>
-							<RemixIcon
-								name="ri-delete-bin-5-fill"
-								size={16}
-								color="#FB2C36"
-							/>
+								<RemixIcon name="ri-delete-bin-5-fill" size={13} color="#DC2626" />
+								Sure?
 							</button>
+							) : (
+							<button
+								onClick={() => requestDelete(session._id)}
+								disabled={isDeleting}
+								className="
+									w-8 h-8
+									flex items-center justify-center
+									rounded-full
+									hover:bg-red-50
+									transition-colors
+									disabled:opacity-40
+								"
+								title="Delete"
+								aria-label="Delete session"
+							>
+								<RemixIcon
+									name="ri-delete-bin-5-fill"
+									size={16}
+									color="#FB2C36"
+								/>
+							</button>
+							)}
 						</>
 						)}
 

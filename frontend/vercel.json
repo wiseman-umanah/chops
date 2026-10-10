@@ -11,6 +11,10 @@
       "dest": "/api/og?slug=$1"
     },
     {
+      "src": "/",
+      "dest": "/api/og"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }

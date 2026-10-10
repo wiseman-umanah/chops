@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalAction, internalMutation, mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 /** Returns all notifications for the current user, newest first. */
@@ -57,44 +57,6 @@ export const markAllRead = mutation({
 });
 
 /**
- * Internal helper — called by demoMarkPaid and the Bachs webhook to
- * insert a notification for the session organizer.
- */
-export const insertPaymentNotification = mutation({
-  args: {
-    organizerId: v.string(),
-    sessionId: v.id("sessions"),
-    participantId: v.id("participants"),
-    participantName: v.string(),
-    amountKobo: v.number(),
-    allPaid: v.boolean(),
-  },
-  handler: async (ctx, args) => {
-    const naira = Math.round(args.amountKobo / 100).toLocaleString("en-NG");
-    await ctx.db.insert("notifications", {
-      userId: args.organizerId,
-      type: "payment",
-      title: `${args.participantName} paid ₦${naira}`,
-      body: args.allPaid ? "All participants have now paid — your session is closed." : undefined,
-      sessionId: args.sessionId,
-      participantId: args.participantId,
-      read: false,
-    });
-
-    if (args.allPaid) {
-      await ctx.db.insert("notifications", {
-        userId: args.organizerId,
-        type: "session_closed",
-        title: "Session fully paid 🎉",
-        body: "All participants have paid. Your chop session is now closed.",
-        sessionId: args.sessionId,
-        read: false,
-      });
-    }
-  },
-});
-
-/**
  * Internal — insert a system notification (payout delivered / failed).
  * Called by the Bachs webhook handler; does not require auth.
  */
@@ -115,5 +77,67 @@ export const insertSystemNotification = internalMutation({
       sessionId: args.sessionId,
       read: false,
     });
+  },
+});
+
+/**
+ * Internal — sends a payment confirmation email to the payer.
+ * Uses the Bachs Transactional Email API if BACHS_EMAIL_FROM is set,
+ * otherwise logs the details (safe no-op in development).
+ *
+ * Called by the Bachs webhook after a successful collection.succeeded event.
+ */
+export const sendPayerConfirmation = internalAction({
+  args: {
+    payerEmail: v.string(),
+    payerName: v.string(),
+    sessionName: v.string(),
+    amountKobo: v.number(),
+    paymentRef: v.string(),
+  },
+  handler: async (_ctx, { payerEmail, payerName, sessionName, amountKobo, paymentRef }) => {
+    const fromEmail = process.env.BACHS_EMAIL_FROM;
+    const secretKey = process.env.BACHS_SECRET_KEY;
+
+    const naira = `₦${Math.round(amountKobo / 100).toLocaleString("en-NG")}`;
+
+    if (!fromEmail || !secretKey) {
+      // Development / misconfiguration — log and skip silently
+      console.log(
+        `[sendPayerConfirmation] Would send to ${payerEmail}: ${naira} paid for "${sessionName}" (ref: ${paymentRef})`
+      );
+      return;
+    }
+
+    const BACHS_API_BASE =
+      process.env.BACHS_ENV === "production"
+        ? "https://api.bachs.io/v1"
+        : "https://sandbox-api.bachs.io/v1";
+
+    const body = {
+      from: fromEmail,
+      to: payerEmail,
+      subject: `Payment confirmed — ${sessionName}`,
+      html: `<p>Hi ${payerName},</p><p>Your payment of <strong>${naira}</strong> for <strong>${sessionName}</strong> was received successfully.</p><p>Reference: <code>${paymentRef}</code></p><p>Thanks for using Chop!</p>`,
+    };
+
+    try {
+      const res = await fetch(`${BACHS_API_BASE}/emails`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${secretKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.warn(`[sendPayerConfirmation] Bachs email API ${res.status}: ${text}`);
+      }
+    } catch (err) {
+      // Non-fatal — payment already confirmed; don't surface email errors to the user
+      console.warn("[sendPayerConfirmation] Failed to send confirmation email:", err);
+    }
   },
 });

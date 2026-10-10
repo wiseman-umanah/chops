@@ -125,11 +125,15 @@ export const insertPayoutRecord = internalMutation({
 
 /**
  * Fetches the list of Nigerian banks from Bachs.
+ * Requires auth — prevents unauthenticated quota burn on the Bachs API.
  * Returns [{ name, code }] sorted by name.
  */
 export const listBanks = action({
   args: {},
-  handler: async (): Promise<{ name: string; code: string }[]> => {
+  handler: async (ctx): Promise<{ name: string; code: string }[]> => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
     const secretKey = process.env.BACHS_SECRET_KEY;
     if (!secretKey) throw new Error("BACHS_SECRET_KEY not configured");
 
@@ -150,14 +154,17 @@ export const listBanks = action({
 
 /**
  * Resolves a Nigerian bank account number to the account holder's name.
- * Called client-side when the user finishes typing 10 digits.
+ * Requires auth — prevents unauthenticated enumeration of bank accounts.
  */
 export const resolveAccount = action({
   args: {
     accountNumber: v.string(),
     bankCode: v.string(),
   },
-  handler: async (_ctx, { accountNumber, bankCode }): Promise<{ accountName: string }> => {
+  handler: async (ctx, { accountNumber, bankCode }): Promise<{ accountName: string }> => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
     const secretKey = process.env.BACHS_SECRET_KEY;
     if (!secretKey) throw new Error("BACHS_SECRET_KEY not configured");
 
@@ -228,6 +235,23 @@ export const requestPayout = action({
     if (session.organizerId !== userId) throw new Error("Not your session");
     if (session.status !== "closed") throw new Error("Session must be completed before payout");
 
+    // ── Duplicate payout guard ────────────────────────────────────────────────
+    // Prevents double-payout if the organizer double-clicks or the client retries.
+    // The Idempotency-Key alone isn't sufficient because each retry would generate
+    // a fresh reference and hit the Bachs API a second time.
+    const existingPayouts: { status: string }[] = await ctx.runQuery(
+      internal.payouts._getPayoutsBySession,
+      { sessionId: args.sessionId }
+    );
+    const activePayouts = existingPayouts.filter(
+      (p) => p.status === "pending" || p.status === "processing" || p.status === "completed"
+    );
+    if (activePayouts.length > 0) {
+      throw new Error(
+        "A payout for this session is already in progress or completed. Check your wallet."
+      );
+    }
+
     const collectedKobo = participants
       .filter((p) => p.status === "sent")
       .reduce((s, p) => s + p.amountOwed, 0);
@@ -267,7 +291,8 @@ export const requestPayout = action({
     const resolvedName = destData.account_name;
 
     // ── 2. Initiate payout ───────────────────────────────────────────────────
-    const reference = "CPO-" + Math.random().toString(36).slice(2, 10).toUpperCase();
+    // crypto.randomUUID() is available in Convex's V8 runtime (collision-safe)
+    const reference = "CPO-" + crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
 
     const payoutRes = await fetch(`${BACHS_API_BASE}/payouts`, {
       method: "POST",
@@ -283,7 +308,9 @@ export const requestPayout = action({
       }),
     });
 
-    const isSandbox = process.env.BACHS_ENV !== "production";
+    // Only treat as sandbox when BACHS_ENV is explicitly "sandbox" or "development".
+    // Leaving BACHS_ENV unset in production previously triggered the bypass silently.
+    const isSandbox = process.env.BACHS_ENV === "sandbox" || process.env.BACHS_ENV === "development";
 
     let bachsPayoutId: string;
 
@@ -364,6 +391,15 @@ export const _getSessionParticipants = internalQuery({
   handler: async (ctx, { sessionId }) =>
     ctx.db
       .query("participants")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect(),
+});
+
+export const _getPayoutsBySession = internalQuery({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, { sessionId }) =>
+    ctx.db
+      .query("payouts")
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
       .collect(),
 });

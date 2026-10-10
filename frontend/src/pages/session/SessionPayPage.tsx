@@ -15,10 +15,8 @@ const MODE_COLOR: Record<string, string> = {
   bill:     '#FB2C36',
 }
 
-const PAYMENT_METHODS = [
-  { id: 'debit',    label: 'Debit Card',    icon: 'ri-bank-card-line'      },
-  { id: 'transfer', label: 'Bank Transfer', icon: 'ri-exchange-dollar-line' },
-]
+// Minimum contribution for chop-in (₦100 = 10,000 kobo)
+const MIN_CONTRIBUTION_KOBO = 10_000
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -106,10 +104,10 @@ export default function SessionPayPage() {
   )
 
   const [viewingAs,    setViewingAs]   = useState<string | null>(null)
-  const [method,       setMethod]      = useState('debit')
   const [paying,       setPaying]      = useState(false)
   const [payError,     setPayError]    = useState<string | null>(null)
   const [payerEmail,   setPayerEmail]  = useState('')
+  const [emailTouched, setEmailTouched] = useState(false)
   // chop-in only: contributor name + amount in naira
   const [contribution, setContribution] = useState('')
   const [chopInName,   setChopInName]  = useState('')
@@ -131,7 +129,7 @@ export default function SessionPayPage() {
     )
   }
 
-  const { mode, name, participants, totalAmount, goalAmount, feePercent } = session
+  const { mode, name, participants, totalAmount, goalAmount } = session
   const accentColor = MODE_COLOR[mode] ?? BRAND
 
   // For chop-in, participants are added dynamically. Show a contribution form.
@@ -148,22 +146,31 @@ export default function SessionPayPage() {
 
   // chop-in contribution in kobo
   const contributionKobo = Math.round((parseInt(contribution.replace(/\D/g, ''), 10) || 0) * 100)
-  // fee deducted on withdrawal for chop-in (shown informatively, not charged here)
-  const chopInFee = feePercent ? Math.round(contributionKobo * (feePercent / 100)) : 0
 
-  // Paid / total count
-  const paidCount = participants.filter(p => p.status === 'sent').length
+  // Only confirmed (paid) contributors — pending rows are pre-reservations and must be hidden
+  const paidParticipants = participants.filter(p => p.status === 'sent')
+  const paidCount = paidParticipants.length
 
   // Progress for chop-in
-  const collected   = participants.reduce((s, p) => s + (p.status === 'sent' ? p.amountOwed : 0), 0)
+  const collected   = paidParticipants.reduce((s, p) => s + p.amountOwed, 0)
   const goal        = goalAmount ?? totalAmount
   const progressPct = goal > 0 ? Math.min(100, Math.round((collected / goal) * 100)) : 0
 
+  // For the final gap: if remaining < global min, lower the effective min to
+  // the remaining amount so it can still be filled exactly.
+  const remaining = Math.max(0, goal - collected)
+  const effectiveMin = isChopIn && remaining > 0 && remaining < MIN_CONTRIBUTION_KOBO
+    ? remaining
+    : MIN_CONTRIBUTION_KOBO
+
   const sessionId = session._id
 
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail.trim())
+
   async function handlePay() {
-    if (isChopIn && contributionKobo <= 0) return
+    if (isChopIn && contributionKobo < effectiveMin) return
     if (!isChopIn && !currentParticipant) return
+    if (!emailValid) { setEmailTouched(true); return }
 
     setPayError(null)
     setPaying(true)
@@ -179,18 +186,20 @@ export default function SessionPayPage() {
         participantId:   isChopIn ? undefined : currentParticipant!._id,
         contributorName: isChopIn ? displayName : undefined,
         amountKobo:      isChopIn ? contributionKobo : undefined,
-        // Pass participantId in the success URL so PaymentSuccessPage can read it
-        // after Bachs redirects the user back. Bachs appends ?checkout_id= too.
+        // For chop-in: the action pre-inserts the participant row and returns its ID.
+        // The ID isn't known until the action completes, so the action itself builds
+        // the final successUrl server-side using the resolved participantId.
+        // For food/bill: the ID is known up-front so we embed it directly here.
         successUrl: `${origin}/payment-success?participantId=${
-          isChopIn ? '__PLACEHOLDER__' : currentParticipant!._id
+          isChopIn ? '__RESOLVED_BY_ACTION__' : currentParticipant!._id
         }`,
         cancelUrl,
         payerName:  displayName,
         payerEmail: payerEmail.trim() || undefined,
       })
 
-      // For chop-in: the actual ID was only resolved inside the action.
-      // Store it in sessionStorage — PaymentSuccessPage reads it on arrival.
+      // sessionStorage: same-device fallback so PaymentSuccessPage can find the
+      // participant ID even if Bachs strips or truncates the success URL query params.
       sessionStorage.setItem('chops_pending_participant', resolvedId)
 
       // Redirect to Bachs-hosted checkout page
@@ -280,10 +289,10 @@ export default function SessionPayPage() {
               <p className="text-[12px] text-neutral-400 mt-1.5 text-right">{formatNaira(goal)} goal</p>
             </div>
 
-            {/* Contributor list */}
-            {participants.length > 0 && (
+            {/* Contributor list — only confirmed (paid) contributors */}
+            {paidParticipants.length > 0 && (
               <div className="flex flex-col gap-2 mb-5">
-                {participants.map(p => (
+                {paidParticipants.map(p => (
                   <div key={p._id} className="flex items-center justify-between px-4 py-3 rounded-full border border-neutral-100 bg-neutral-50">
                     <span className="text-[13px] font-medium text-neutral-800">{p.name}</span>
                     <span className="text-[13px] font-semibold" style={{ color: accentColor }}>
@@ -320,11 +329,6 @@ export default function SessionPayPage() {
                     className="flex-1 text-[14px] text-neutral-800 outline-none bg-transparent"
                   />
                 </div>
-                {contributionKobo > 0 && feePercent && (
-                  <p className="text-[11px] text-neutral-400 mt-1.5 text-right">
-                    {feePercent}% fee deducted on withdrawal ({formatNaira(chopInFee)})
-                  </p>
-                )}
               </div>
             </div>
 
@@ -411,34 +415,35 @@ export default function SessionPayPage() {
                 type="email"
                 placeholder="you@example.com"
                 value={payerEmail}
-                onChange={e => setPayerEmail(e.target.value)}
-                className="w-full border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none transition-colors bg-white"
-                onFocus={e => { e.currentTarget.style.borderColor = accentColor }}
-                onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                onChange={e => { setPayerEmail(e.target.value); setEmailTouched(false) }}
+                className="w-full border rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none transition-colors bg-white"
+                style={{
+                  borderColor: emailTouched && !emailValid ? '#dc2626' : undefined,
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = emailTouched && !emailValid ? '#dc2626' : accentColor }}
+                onBlur={e => {
+                  setEmailTouched(true)
+                  e.currentTarget.style.borderColor = payerEmail.trim() && !emailValid ? '#dc2626' : ''
+                }}
               />
+              {emailTouched && !emailValid && payerEmail.trim() && (
+                <p className="text-[12px] text-red-600 mt-1.5 px-1">Please enter a valid email address</p>
+              )}
             </div>
 
-            <p className="text-[13px] text-neutral-600 mb-3">Payment method</p>
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              {PAYMENT_METHODS.map(m => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setMethod(m.id)}
-                  className="flex flex-col items-center gap-2 py-4 rounded-2xl border transition-all"
-                  style={{
-                    borderColor: method === m.id ? accentColor : '#e5e7eb',
-                    background:  method === m.id ? '#fff8f3'   : '#fff',
-                  }}
-                >
-                  <RemixIcon name={m.icon} size={22} color={method === m.id ? accentColor : '#6b7280'} />
-                  <span className="text-[13px] font-medium"
-                    style={{ color: method === m.id ? accentColor : '#374151' }}>
-                    {m.label}
-                  </span>
-                </button>
-              ))}
+            {/* Payment info */}
+            <div className="flex items-center gap-2 mb-5 px-1">
+              <RemixIcon name="ri-secure-payment-line" size={15} color="#9ca3af" />
+              <p className="text-[12px] text-neutral-400">Payments are processed securely via Bachs</p>
             </div>
+
+            {/* Minimum contribution error (chop-in only) */}
+            {isChopIn && contributionKobo > 0 && contributionKobo < effectiveMin && (
+              <div className="mb-3 px-4 py-2.5 rounded-2xl text-[13px] font-medium"
+                style={{ background: '#fff7ed', color: '#9a3412' }}>
+                Minimum contribution is {formatNaira(effectiveMin)}
+              </div>
+            )}
 
             {payError && (
               <div className="mb-3 px-4 py-2.5 rounded-2xl text-[13px] font-medium"
@@ -449,7 +454,7 @@ export default function SessionPayPage() {
 
             <button
               onClick={handlePay}
-              disabled={paying || !payerEmail.trim()}
+              disabled={paying || !emailValid || (isChopIn && contributionKobo < effectiveMin)}
               className="w-full py-4 rounded-full text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               style={{ background: accentColor }}
             >

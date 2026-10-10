@@ -7,6 +7,7 @@ import { HelmetProvider } from 'react-helmet-async'
 import { WatchupProvider } from '@watchupltd/react'
 import App from './App.tsx'
 import './index.css'
+import 'remixicon/fonts/remixicon.css'
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string)
 
