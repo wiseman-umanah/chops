@@ -178,4 +178,32 @@ export default defineSchema({
     .index("by_organizer", ["organizerId"])
     .index("by_session", ["sessionId"])
     .index("by_bachs_payout", ["bachsPayoutId"]),
+
+  /**
+   * One referral code per user.
+   * Generated lazily on first access — existing users get one on demand.
+   *
+   * code — 6-char uppercase alphanumeric, e.g. "KNOX42"
+   */
+  referralCodes: defineTable({
+    userId: v.string(),
+    code:   v.string(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_code", ["code"]),
+
+  /**
+   * Records each successful referral (one row per referred signup).
+   *
+   * referrerId — userId of the person whose code was used
+   * referredId — userId of the newly created account
+   * code       — the exact code used (for audit)
+   */
+  referrals: defineTable({
+    referrerId: v.string(),
+    referredId: v.string(),
+    code:       v.string(),
+  })
+    .index("by_referrer", ["referrerId"])
+    .index("by_referred", ["referredId"]),
 });

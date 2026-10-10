@@ -29,6 +29,8 @@ interface WithdrawModalProps {
     payoutKobo: number
     feeKobo: number
     collectedKobo: number
+    chopFeeKobo: number
+    bachsTransferFeeKobo: number
   }
   onClose: () => void
 }
@@ -160,15 +162,15 @@ function WithdrawModal({ session, onClose }: WithdrawModalProps) {
                 <span className="text-neutral-500">Collected</span>
                 <span className="font-semibold text-neutral-800">{formatNaira(session.collectedKobo)}</span>
               </div>
-              {'chopFeeKobo' in session && (session as { chopFeeKobo: number }).chopFeeKobo > 0 && (
+              {session.chopFeeKobo > 0 && (
                 <div className="flex justify-between text-[13px]">
                   <span className="text-neutral-500">Platform fee (1.5%)</span>
-                  <span className="font-semibold text-neutral-500">−{formatNaira((session as { chopFeeKobo: number }).chopFeeKobo)}</span>
+                  <span className="font-semibold text-neutral-500">−{formatNaira(session.chopFeeKobo)}</span>
                 </div>
               )}
               <div className="flex justify-between text-[13px]">
                 <span className="text-neutral-500">Transfer fee (Bachs)</span>
-                <span className="font-semibold text-neutral-500">−{formatNaira(50)}</span>
+                <span className="font-semibold text-neutral-500">−{formatNaira(session.bachsTransferFeeKobo)}</span>
               </div>
               <div className="border-t border-neutral-200 pt-2 flex justify-between text-[14px]">
                 <span className="font-bold text-neutral-800">You receive</span>

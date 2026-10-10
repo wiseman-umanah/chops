@@ -1,9 +1,11 @@
-import { useState, useMemo } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Seo } from '@/hooks/useSeo'
 import { motion } from 'framer-motion'
 import Logo from '@/components/Logo'
 import { useAuthActions } from '@convex-dev/auth/react'
+import { useQuery, useMutation } from 'convex/react'
+import { api } from '../../../../convex/_generated/api'
 import handLeft from '../../../asset/images/hand-left1.png'
 import handRight from '../../../asset/images/hand-right.png'
 
@@ -64,6 +66,7 @@ function Field({
   onChange,
   required,
   suffix,
+  disabled,
 }: {
   label: string
   id: string
@@ -73,6 +76,7 @@ function Field({
   onChange: (v: string) => void
   required?: boolean
   suffix?: React.ReactNode
+  disabled?: boolean
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -87,7 +91,8 @@ function Field({
           value={value}
           onChange={e => onChange(e.target.value)}
           required={required}
-          className="w-full rounded-full border border-neutral-200 bg-white px-4 py-3 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:border-[#FF6900] transition-colors"
+          disabled={disabled}
+          className="w-full rounded-full border border-neutral-200 bg-white px-4 py-3 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:border-[#FF6900] transition-colors disabled:bg-neutral-50 disabled:text-neutral-400 disabled:cursor-not-allowed"
         />
         {suffix && (
           <div className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400">
@@ -234,8 +239,9 @@ function LoginForm() {
 }
 
 // ── Signup form ───────────────────────────────────────────────────────────────
-function SignupForm() {
+function SignupForm({ initialRef }: { initialRef: string }) {
   const { signIn } = useAuthActions()
+  const recordReferral = useMutation(api.referrals.recordReferral)
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName]   = useState('')
@@ -246,6 +252,43 @@ function SignupForm() {
   const [agreed, setAgreed]       = useState(false)
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
+
+  // Referral code state
+  const [refCode, setRefCode]   = useState(initialRef.toUpperCase())
+  // locked = URL had a valid 6-char code; we validate it below
+  const [refLocked, setRefLocked] = useState(false)
+  const [refError, setRefError]   = useState('')
+
+  // Validate the code from URL on mount — if valid, lock the field
+  const urlCodeToValidate = initialRef.length === 6 ? initialRef.toUpperCase() : ''
+  const validationResult = useQuery(
+    api.referrals.validateReferralCode,
+    urlCodeToValidate ? { code: urlCodeToValidate } : 'skip'
+  )
+
+  useEffect(() => {
+    if (!urlCodeToValidate) return
+    if (validationResult === undefined) return // still loading
+    if (validationResult.valid) {
+      setRefLocked(true)
+      setRefError('')
+    } else {
+      // Invalid code in URL — leave editable, show soft error
+      setRefError('This referral code doesn\'t exist. You can still sign up.')
+    }
+  }, [validationResult, urlCodeToValidate])
+
+  // Validate manually-typed code on blur (only when not locked)
+  async function handleRefBlur() {
+    if (refLocked || !refCode) { setRefError(''); return }
+    if (refCode.length !== 6) {
+      setRefError('Referral codes are 6 characters long.')
+      return
+    }
+    // We can't call useQuery imperatively, so we show a neutral hint
+    // The actual validation happens at submit time via recordReferral (which silently ignores invalid codes)
+    setRefError('')
+  }
 
   const emailValid = isValidEmail(email)
   const pwPassed   = useMemo(() => pwStrength(password) === PW_RULES.length, [password])
@@ -265,6 +308,12 @@ function SignupForm() {
         lastName: lastName.trim() || '',
         phone: phone || '',
       })
+      // Record referral after successful signup if a code was provided
+      if (refCode.trim().length === 6) {
+        await recordReferral({ code: refCode.trim() }).catch(() => {
+          // Silently ignore — referral recording failure must never block signup
+        })
+      }
     } catch (err) {
       console.error('Signup error:', err)
       const msg = err instanceof Error ? err.message : ''
@@ -329,6 +378,47 @@ function SignupForm() {
         <PasswordChecklist password={password} />
       </div>
 
+      {/* Referral code — optional */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="signup-refcode" className="text-[13px] font-semibold text-neutral-800">
+          Referral code <span className="font-normal text-neutral-400">(optional)</span>
+        </label>
+        <div className="relative">
+          <input
+            id="signup-refcode"
+            type="text"
+            placeholder="e.g. KNOX42"
+            value={refCode}
+            onChange={e => {
+              if (refLocked) return
+              setRefCode(e.target.value.toUpperCase().slice(0, 6))
+              setRefError('')
+            }}
+            onBlur={handleRefBlur}
+            disabled={refLocked}
+            maxLength={6}
+            className="w-full rounded-full border bg-white px-4 py-3 text-[14px] font-mono tracking-widest placeholder:text-neutral-400 outline-none transition-colors disabled:bg-neutral-50 disabled:cursor-not-allowed"
+            style={{
+              borderColor: refLocked ? '#16a34a' : refError ? '#f87171' : '#e5e7eb',
+              color: refLocked ? '#16a34a' : '#1f2328',
+            }}
+          />
+          {refLocked && (
+            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+              <i className="ri-lock-fill text-[16px]" style={{ color: '#16a34a' }} />
+            </div>
+          )}
+        </div>
+        {refLocked && validationResult?.valid && (
+          <p className="text-[12px] text-green-600 pl-1">
+            ✓ Referred by {validationResult.referrerName}
+          </p>
+        )}
+        {refError && (
+          <p className="text-[12px] text-neutral-400 pl-1">{refError}</p>
+        )}
+      </div>
+
       {/* Terms & privacy checkbox */}
       <label className="flex items-start gap-2.5 cursor-pointer select-none">
         <input
@@ -355,12 +445,18 @@ function SignupForm() {
 export default function AuthPage() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+
+  // Read referral code from URL param — passed down to SignupForm
+  const refFromUrl = (searchParams.get('ref') ?? '').toUpperCase().slice(0, 6)
 
   const tab: 'login' | 'signup' =
     pathname === '/signup' ? 'signup' : 'login'
 
   function setTab(t: 'login' | 'signup') {
-    navigate(t === 'login' ? '/login' : '/signup', { replace: true })
+    // Preserve ref param when switching tabs
+    const refPart = refFromUrl ? `?ref=${refFromUrl}` : ''
+    navigate(t === 'login' ? `/login${refPart}` : `/signup${refPart}`, { replace: true })
   }
 
   return (
@@ -426,7 +522,7 @@ export default function AuthPage() {
 
               {/* Form region */}
               <div className="px-8 sm:px-10 pb-8 sm:pb-10">
-                {tab === 'login' ? <LoginForm /> : <SignupForm />}
+                {tab === 'login' ? <LoginForm /> : <SignupForm initialRef={refFromUrl} />}
               </div>
             </motion.div>
           </div>

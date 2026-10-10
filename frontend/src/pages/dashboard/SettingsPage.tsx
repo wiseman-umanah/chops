@@ -1,11 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Seo } from '@/hooks/useSeo'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthActions } from '@convex-dev/auth/react'
-import { useMutation } from 'convex/react'
+import { useMutation, useQuery } from 'convex/react'
 import { useAuth } from '@/contexts/AuthContext'
 import RemixIcon from '@/components/RemixIcon'
+import { QRCodeSVG } from 'qrcode.react'
 import { api } from '../../../../convex/_generated/api'
 
 const BRAND = '#FF6900'
@@ -449,7 +450,10 @@ export default function SettingsPage() {
           </form>
         </motion.div>
 
-        {/* ── Section 3: Change password ── */}
+        {/* ── Section 3: Referral ── */}
+        <ReferralSection />
+
+        {/* ── Section 4: Change password ── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -554,6 +558,168 @@ export default function SettingsPage() {
           )}
         </motion.div>
       </div>
+    </>
+  )
+}
+
+// ── Referral section ──────────────────────────────────────────────────────────
+
+function ReferralSection() {
+  const codeRow      = useQuery(api.referrals.getMyReferralCode)
+  const stats        = useQuery(api.referrals.getMyReferralStats)
+  const generateCode = useMutation(api.referrals.generateReferralCode)
+
+  const [copied,    setCopied]    = useState(false)
+  const [qrOpen,    setQrOpen]    = useState(false)
+  const [generating, setGenerating] = useState(false)
+
+  const code      = codeRow?.code ?? null
+  const shareUrl  = code ? `${window.location.origin}/signup?ref=${code}` : ''
+  const count     = stats?.count ?? 0
+  const referred  = stats?.referred ?? []
+
+  async function handleGenerate() {
+    setGenerating(true)
+    try { await generateCode() } finally { setGenerating(false) }
+  }
+
+  function handleCopy() {
+    if (!shareUrl) return
+    navigator.clipboard.writeText(shareUrl).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, delay: 0.08 }}
+        className="border border-neutral-200 rounded-2xl p-6 mb-5"
+      >
+        <h2 className="text-[16px] font-bold text-neutral-900 mb-1">Referral</h2>
+        <p className="text-[13px] text-neutral-400 mb-5">
+          Share your code — when someone signs up with it, they're counted as your referral.
+        </p>
+
+        {code ? (
+          <>
+            {/* Code display */}
+            <div className="rounded-full border border-neutral-200 px-5 py-3 font-mono text-[20px] font-bold tracking-[0.25em] text-neutral-900 bg-neutral-50 select-all text-center mb-3">
+              {code}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                onClick={handleCopy}
+                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-[13px] font-semibold transition-colors border"
+                style={copied
+                  ? { background: '#dcfce7', color: '#16a34a', borderColor: '#bbf7d0' }
+                  : { background: '#f5f5f5', color: '#374151', borderColor: '#e5e7eb' }
+                }
+              >
+                <RemixIcon name={copied ? 'ri-check-line' : 'ri-file-copy-line'} size={14} color={copied ? '#16a34a' : '#6b7280'} />
+                {copied ? 'Copied!' : 'Copy link'}
+              </button>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`Join Chop with my referral code *${code}* and split payments effortlessly 🍽️\n\n${shareUrl}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full border border-neutral-200 hover:bg-neutral-50 transition-colors"
+                title="Share on WhatsApp"
+              >
+                <RemixIcon name="ri-whatsapp-line" size={18} color="#25D366" />
+              </a>
+              <button
+                onClick={() => setQrOpen(true)}
+                className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full border border-neutral-200 hover:bg-neutral-50 transition-colors"
+                title="Show QR code"
+              >
+                <RemixIcon name="ri-qr-code-line" size={18} color="#6b7280" />
+              </button>
+            </div>
+
+            {/* Referral count */}
+            <div className="flex items-center gap-2 px-4 py-3 rounded-2xl" style={{ background: '#f9fafb' }}>
+              <RemixIcon name="ri-group-line" size={16} color="#6b7280" />
+              <span className="text-[13px] text-neutral-600">
+                <span className="font-bold text-neutral-900">{count}</span>
+                {' '}{count === 1 ? 'person' : 'people'} signed up with your code
+              </span>
+            </div>
+
+            {/* Referred list — show up to 5 */}
+            {referred.length > 0 && (
+              <div className="mt-3 flex flex-col gap-1.5">
+                {referred.slice(0, 5).map((r, i) => (
+                  <div key={i} className="flex items-center justify-between text-[13px] px-1">
+                    <span className="font-medium text-neutral-800">{r.name}</span>
+                    <span className="text-neutral-400 text-[12px]">
+                      {new Date(r.joinedAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  </div>
+                ))}
+                {referred.length > 5 && (
+                  <p className="text-[12px] text-neutral-400 px-1">+{referred.length - 5} more</p>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <button
+            onClick={handleGenerate}
+            disabled={generating || codeRow === undefined}
+            className="flex items-center gap-2 px-5 py-3 rounded-full text-[13px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            style={{ background: '#FF6900' }}
+          >
+            <RemixIcon name="ri-gift-line" size={15} color="#fff" />
+            {generating ? 'Generating…' : 'Get my referral code'}
+          </button>
+        )}
+      </motion.div>
+
+      {/* QR modal */}
+      <AnimatePresence>
+        {qrOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.45)' }}
+            onClick={() => setQrOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.18 }}
+              className="bg-white rounded-3xl p-8 flex flex-col items-center gap-5 max-w-[320px] w-full"
+              onClick={e => e.stopPropagation()}
+            >
+              <p className="text-[15px] font-bold text-neutral-900 text-center">Scan to join Chop</p>
+              <div className="rounded-2xl border border-neutral-100 p-4 bg-white">
+                <QRCodeSVG
+                  value={shareUrl}
+                  size={180}
+                  bgColor="#ffffff"
+                  fgColor="#18181b"
+                  level="M"
+                />
+              </div>
+              <p className="text-[12px] text-neutral-400 text-center font-mono tracking-widest">{code}</p>
+              <button
+                onClick={() => setQrOpen(false)}
+                className="w-full py-3 rounded-full text-[14px] font-bold border border-neutral-200 text-neutral-700 hover:bg-neutral-50 transition-colors"
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }
