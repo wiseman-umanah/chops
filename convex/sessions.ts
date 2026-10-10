@@ -184,8 +184,8 @@ export const createSession = mutation({
         participants.length
       );
     } else {
-      // chop-in: 10% charged at withdrawal, not on each participant
-      feePercent = 10;
+      // chop-in: 1.5% charged at withdrawal, not on each participant
+      feePercent = 1.5;
     }
 
     // ── Insert session ────────────────────────────────────────────────────

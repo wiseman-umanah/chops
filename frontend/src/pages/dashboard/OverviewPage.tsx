@@ -733,27 +733,46 @@ const STATS = [
 							text-neutral-500
 							"
 						>
-							<span className="whitespace-nowrap">
-							{session.paidCount}/{session.participantCount} paid
-							</span>
-
-							<span className="text-neutral-300 hidden xs:inline">
-							·
-							</span>
-
-							<span className="text-[#16a34a] font-medium whitespace-nowrap">
-							{formatNaira(session.paidAmount)} settled
-							</span>
-
-							{session.pendingAmount > 0 && (
+							{/* Chop-in: show collected amount + contributor count, no X/Y paid ratio */}
+							{session.mode === 'chop-in' ? (
 							<>
+								<span className="text-[#16a34a] font-medium whitespace-nowrap">
+								{formatNaira(session.paidAmount)} collected
+								</span>
+								{session.paidCount > 0 && (
+								<>
+									<span className="text-neutral-300 hidden xs:inline">·</span>
+									<span className="whitespace-nowrap">
+									{session.paidCount} contributor{session.paidCount !== 1 ? 's' : ''}
+									</span>
+								</>
+								)}
+							</>
+							) : (
+							<>
+								<span className="whitespace-nowrap">
+								{session.paidCount}/{session.participantCount} paid
+								</span>
+	
 								<span className="text-neutral-300 hidden xs:inline">
 								·
 								</span>
-
-								<span className="text-[#9a3412] font-medium whitespace-nowrap">
-								{formatNaira(session.pendingAmount)} pending
+	
+								<span className="text-[#16a34a] font-medium whitespace-nowrap">
+								{formatNaira(session.paidAmount)} settled
 								</span>
+	
+								{session.pendingAmount > 0 && (
+								<>
+									<span className="text-neutral-300 hidden xs:inline">
+									·
+									</span>
+	
+									<span className="text-[#9a3412] font-medium whitespace-nowrap">
+									{formatNaira(session.pendingAmount)} pending
+									</span>
+								</>
+								)}
 							</>
 							)}
 						</div>
@@ -802,7 +821,7 @@ const STATS = [
 						/>
 						</button>
 
-						{/* Finalize (food/bill only — chop-in uses Close instead) */}
+						{/* Finalize (food/bill only) */}
 						{isComplete && session.mode !== 'chop-in' && (
 						<button
 							onClick={() => setFinalizeSession(session)}
@@ -829,6 +848,36 @@ const STATS = [
 							color="#fff"
 							/>
 							<span>Finalize</span>
+						</button>
+						)}
+	
+						{/* Withdraw (chop-in completed only) */}
+						{isComplete && session.mode === 'chop-in' && (
+						<button
+							onClick={() => navigate('/dashboard/wallet')}
+							className="
+							flex
+							items-center
+							gap-1.5
+							px-3
+							py-1.5
+							rounded-full
+							text-[12px]
+							font-bold
+							text-white
+							transition-opacity
+							hover:opacity-85
+							whitespace-nowrap
+							"
+							style={{ background: '#00C950' }}
+							title="Withdraw funds"
+						>
+							<RemixIcon
+							name="ri-bank-card-line"
+							size={13}
+							color="#fff"
+							/>
+							<span>Withdraw</span>
 						</button>
 						)}
 
