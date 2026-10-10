@@ -50,9 +50,6 @@ export default function ShareLinkPage() {
     setTimeout(() => setCopiedCode(false), 2000)
   }
 
-  function handleWhatsApp() {
-    window.open(`https://wa.me/?text=${encodeURIComponent(waMessage)}`, '_blank')
-  }
 
   return (
     <div className="max-w-[800px] mx-auto">
@@ -115,15 +112,17 @@ export default function ShareLinkPage() {
             </button>
           </div>
 
-          {/* WhatsApp button */}
-          <button
-            onClick={handleWhatsApp}
+          {/* WhatsApp button — <a> tag guarantees the browser treats it as a navigation, not a popup */}
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(waMessage)}`}
+            target="_blank"
+            rel="noopener noreferrer"
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full text-[14px] text-white transition-opacity hover:opacity-90"
             style={{ background: WHATSAPP_GREEN }}
           >
             <RemixIcon name="ri-whatsapp-line" />
             Share directly on WhatsApp
-          </button>
+          </a>
         </div>
 
         {/* ── WhatsApp preview ──────────────────────────────────────────── */}
