@@ -16,6 +16,7 @@ import type * as notifications from "../notifications.js";
 import type * as participants from "../participants.js";
 import type * as payments from "../payments.js";
 import type * as payouts from "../payouts.js";
+import type * as referrals from "../referrals.js";
 import type * as sessions from "../sessions.js";
 import type * as users from "../users.js";
 
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   participants: typeof participants;
   payments: typeof payments;
   payouts: typeof payouts;
+  referrals: typeof referrals;
   sessions: typeof sessions;
   users: typeof users;
 }>;
