@@ -160,12 +160,16 @@ function WithdrawModal({ session, onClose }: WithdrawModalProps) {
                 <span className="text-neutral-500">Collected</span>
                 <span className="font-semibold text-neutral-800">{formatNaira(session.collectedKobo)}</span>
               </div>
-              {session.feeKobo > 0 && (
+              {'chopFeeKobo' in session && (session as { chopFeeKobo: number }).chopFeeKobo > 0 && (
                 <div className="flex justify-between text-[13px]">
-                  <span className="text-neutral-500">Platform fee (10%)</span>
-                  <span className="font-semibold text-neutral-500">−{formatNaira(session.feeKobo)}</span>
+                  <span className="text-neutral-500">Platform fee (1.5%)</span>
+                  <span className="font-semibold text-neutral-500">−{formatNaira((session as { chopFeeKobo: number }).chopFeeKobo)}</span>
                 </div>
               )}
+              <div className="flex justify-between text-[13px]">
+                <span className="text-neutral-500">Transfer fee (Bachs)</span>
+                <span className="font-semibold text-neutral-500">−{formatNaira(50)}</span>
+              </div>
               <div className="border-t border-neutral-200 pt-2 flex justify-between text-[14px]">
                 <span className="font-bold text-neutral-800">You receive</span>
                 <span className="font-extrabold" style={{ color: CHOP_IN_GREEN }}>{formatNaira(session.payoutKobo)}</span>

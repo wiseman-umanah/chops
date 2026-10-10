@@ -55,12 +55,17 @@ export const listCompletedChopIn = query({
         const collectedKobo = participants
           .filter((p) => p.status === "sent")
           .reduce((s, p) => s + p.amountOwed, 0);
-        const feeKobo = session.feePercent
+        const chopFeeKobo = session.feePercent
           ? Math.round(collectedKobo * (session.feePercent / 100))
           : 0;
+        // ₦50 flat Bachs bank transfer fee — deducted from payout so our wallet self-funds
+        const bachsTransferFeeKobo = 5000;
+        const feeKobo = chopFeeKobo + bachsTransferFeeKobo;
         return {
           ...session,
           collectedKobo,
+          chopFeeKobo,
+          bachsTransferFeeKobo,
           feeKobo,
           payoutKobo: collectedKobo - feeKobo,
         };
@@ -255,10 +260,12 @@ export const requestPayout = action({
     const collectedKobo = participants
       .filter((p) => p.status === "sent")
       .reduce((s, p) => s + p.amountOwed, 0);
-    const feeKobo = session.feePercent
+    const chopFeeKobo = session.feePercent
       ? Math.round(collectedKobo * (session.feePercent / 100))
       : 0;
-    const payoutKobo = collectedKobo - feeKobo;
+    // ₦50 flat Bachs bank transfer fee — deducted from payout so our wallet self-funds
+    const bachsTransferFeeKobo = 5000;
+    const payoutKobo = collectedKobo - chopFeeKobo - bachsTransferFeeKobo;
     // Bachs wants decimal string at currency precision
     const amountStr = (payoutKobo / 100).toFixed(2);
 

@@ -162,7 +162,7 @@ export default function ChopInPage() {
             />
             <FieldError msg={goalErr} />
             <p className="text-[12px] text-neutral-400 mt-2">
-              A 10% platform fee is applied when you withdraw funds.
+              A 1.5% platform fee + ₦50 transfer fee is applied when you withdraw funds.
             </p>
           </div>
 
@@ -187,14 +187,20 @@ export default function ChopInPage() {
               </div>
               {totalNaira > 0 && (
                 <div className="flex justify-between text-white/70 text-[13px]">
-                  <span>Withdrawal fee (10%)</span>
-                  <span>-{formatNaira(Math.round(totalNaira * 0.1))}</span>
+                  <span>Platform fee (1.5%)</span>
+                  <span>-{formatNaira(Math.round(totalNaira * 0.015))}</span>
                 </div>
               )}
               {totalNaira > 0 && (
-                <div className="flex justify-between text-[14px] font-semibold">
+                <div className="flex justify-between text-white/70 text-[13px]">
+                  <span>Transfer fee (Bachs)</span>
+                  <span>-{formatNaira(50)}</span>
+                </div>
+              )}
+              {totalNaira > 0 && (
+                <div className="flex justify-between text-[14px] font-semibold border-t border-white/20 pt-2 mt-1">
                   <span>You receive</span>
-                  <span>{formatNaira(Math.round(totalNaira * 0.9))}</span>
+                  <span>{formatNaira(Math.round(totalNaira * 0.985) - 50)}</span>
                 </div>
               )}
             </div>
