@@ -1,17 +1,17 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, query } from "./_generated/server";
 
 /**
  * Looks up a single participant + their session by payment reference.
  * Used by the public receipt page (/r/:paymentRef).
+ * payerEmail is stripped — it is never needed by the receipt UI.
  */
 export const getByPaymentRef = query({
   args: { paymentRef: v.string() },
   handler: async (ctx, { paymentRef }) => {
-    // Scan is acceptable — paymentRef is unique and receipts are viewed rarely
     const participant = await ctx.db
       .query("participants")
-      .filter((q) => q.eq(q.field("paymentRef"), paymentRef))
+      .withIndex("by_payment_ref", (q) => q.eq("paymentRef", paymentRef))
       .first();
 
     if (!participant) return null;
@@ -25,36 +25,64 @@ export const getByPaymentRef = query({
       .withIndex("by_session", (q) => q.eq("sessionId", participant.sessionId))
       .collect();
 
-    return { participant, session, allParticipants };
+    // Strip payerEmail before sending to the client
+    const { payerEmail: _pe, ...safeParticipant } = participant;
+    void _pe;
+    const safeAll = allParticipants.map(({ payerEmail: _e, ...p }) => { void _e; return p; });
+
+    return { participant: safeParticipant, session, allParticipants: safeAll };
   },
 });
 
-/** Fetches a single participant by ID. Used by the checkout action. */
-export const getParticipantById = query({
+/**
+ * Fetches a single participant by ID — for internal use by actions.
+ * Returns the full row including payerEmail (needed by initiateCheckout + webhook).
+ */
+export const getParticipantById = internalQuery({
   args: { participantId: v.id("participants") },
   handler: async (ctx, { participantId }) => {
     return ctx.db.get(participantId);
   },
 });
 
-/** Returns all participants for a session (public) */
-export const getParticipantsBySession = query({
-  args: { sessionId: v.id("sessions") },
-  handler: async (ctx, { sessionId }) => {
-    return ctx.db
-      .query("participants")
-      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
-      .collect();
+/**
+ * Public status-only poll — used by PaymentSuccessPage to detect when the
+ * Bachs webhook has marked the participant as paid.
+ * Returns only { status, paymentRef } — no PII, no email.
+ */
+export const getParticipantStatus = query({
+  args: { participantId: v.id("participants") },
+  handler: async (ctx, { participantId }) => {
+    const row = await ctx.db.get(participantId);
+    if (!row) return null;
+    return { status: row.status, paymentRef: row.paymentRef ?? null };
   },
 });
 
 /**
- * Called by the Bachs webhook after a verified payment.
- * Flips participant status to "sent", records the payment reference,
- * fires a notification to the organizer, and auto-closes the session
- * when all participants have paid (food/bill modes).
+ * Returns participants for a session (public — shown on the pay page).
+ * payerEmail is stripped — it is private to the participant.
  */
-export const updateParticipantStatus = mutation({
+export const getParticipantsBySession = query({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, { sessionId }) => {
+    const rows = await ctx.db
+      .query("participants")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect();
+    return rows.map(({ payerEmail: _e, ...p }) => { void _e; return p; });
+  },
+});
+
+/**
+ * Called ONLY by the Bachs webhook HTTP action after signature verification.
+ * Internal-only — cannot be called by any authenticated frontend client.
+ *
+ * Flips participant status to "sent", records the payment reference,
+ * fires a notification to the organizer, and auto-closes food/bill sessions
+ * when all participants have paid.
+ */
+export const updateParticipantStatus = internalMutation({
   args: {
     participantId: v.id("participants"),
     paymentRef: v.string(),
@@ -62,6 +90,12 @@ export const updateParticipantStatus = mutation({
   handler: async (ctx, { participantId, paymentRef }) => {
     const participant = await ctx.db.get(participantId);
     if (!participant) throw new Error("Participant not found");
+
+    // Idempotency guard — if already paid, this is a duplicate webhook call. Ignore it.
+    if (participant.status === "sent") {
+      console.log(`Duplicate webhook for participant ${participantId} — already sent, skipping`);
+      return;
+    }
 
     await ctx.db.patch(participantId, { status: "sent", paymentRef });
 
@@ -105,94 +139,8 @@ export const updateParticipantStatus = mutation({
   },
 });
 
-/**
- * Demo payment — marks an existing participant as paid (food/bill),
- * or inserts a new contributor and marks them paid (chop-in).
- * No payment gateway involved; for development/demo use only.
- */
-export const demoMarkPaid = mutation({
-  args: {
-    /** The session the payment belongs to */
-    sessionId: v.id("sessions"),
-    /**
-     * For food/bill: the _id of the existing participant row.
-     * For chop-in: omit — a new row will be inserted.
-     */
-    participantId: v.optional(v.id("participants")),
-    /** chop-in only — contributor display name */
-    contributorName: v.optional(v.string()),
-    /** chop-in only — amount contributed in kobo */
-    amountKobo: v.optional(v.number()),
-    /** A client-generated demo reference (e.g. "DEMO-xxxxxx") */
-    paymentRef: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const { sessionId, participantId, contributorName, amountKobo, paymentRef } = args;
+// demoMarkPaid removed — replaced by real Bachs payment flow.
+// If needed for testing, use the Bachs sandbox with a real checkout session.
 
-    const session = await ctx.db.get(sessionId);
-    if (!session) throw new Error("Session not found");
-
-    let participantName: string;
-    let paidAmount: number;
-    let notifParticipantId: (typeof args)["participantId"];
-
-    if (participantId) {
-      // food / bill — flip existing participant
-      const p = await ctx.db.get(participantId);
-      if (!p) throw new Error("Participant not found");
-      await ctx.db.patch(participantId, { status: "sent", paymentRef });
-      participantName = p.name;
-      paidAmount = p.amountOwed;
-      notifParticipantId = participantId;
-    } else {
-      // chop-in — insert a new contributor row and immediately mark it paid
-      if (!amountKobo || amountKobo <= 0) throw new Error("amountKobo required for chop-in");
-      const newId = await ctx.db.insert("participants", {
-        sessionId,
-        name: contributorName ?? "Anonymous",
-        amountOwed: amountKobo,
-        status: "sent",
-        paymentRef,
-        contributionAmount: amountKobo,
-      });
-      notifParticipantId = newId;
-      participantName = contributorName ?? "Anonymous";
-      paidAmount = amountKobo;
-    }
-
-    // Check if all participants are now paid (for food/bill — chop-in never fully "closes")
-    const allParticipants = await ctx.db
-      .query("participants")
-      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
-      .collect();
-    const allPaid =
-      session.mode !== "chop-in" &&
-      allParticipants.length > 0 &&
-      allParticipants.every((p) => p.status === "sent");
-
-    // Insert payment notification for the organizer
-    const naira = Math.round(paidAmount / 100).toLocaleString("en-NG");
-    await ctx.db.insert("notifications", {
-      userId: session.organizerId,
-      type: "payment",
-      title: `${participantName} paid ₦${naira}`,
-      body: allPaid ? "All participants have now paid." : undefined,
-      sessionId,
-      participantId: notifParticipantId,
-      read: false,
-    });
-
-    if (allPaid) {
-      // Close the session
-      await ctx.db.patch(sessionId, { status: "closed" });
-      await ctx.db.insert("notifications", {
-        userId: session.organizerId,
-        type: "session_closed",
-        title: "Session fully paid 🎉",
-        body: `All participants in "${session.name}" have paid. Session is now closed.`,
-        sessionId,
-        read: false,
-      });
-    }
-  },
-});
+// patchPayerEmail removed — email patching is handled internally by
+// internalPatchPayerEmail in payments.ts (called from initiateCheckout action).

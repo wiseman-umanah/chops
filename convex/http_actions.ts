@@ -1,5 +1,5 @@
 import { httpAction } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 /**
  * Bachs payment webhook.
@@ -128,13 +128,36 @@ export const bachsWebhook = httpAction(async (_ctx, request) => {
     }
 
     try {
-      await _ctx.runMutation(api.participants.updateParticipantStatus, {
+      await _ctx.runMutation(internal.participants.updateParticipantStatus, {
         participantId: participantId as never,
         paymentRef,
       });
     } catch (err) {
       console.error("Bachs webhook: failed to update participant", err);
       return new Response("Internal error", { status: 500 });
+    }
+
+    // Fire payer confirmation email (non-fatal — runs after the mutation succeeds)
+    try {
+      const participant = await _ctx.runQuery(internal.participants.getParticipantById, {
+        participantId: participantId as never,
+      });
+      if (participant?.payerEmail) {
+        const session = await _ctx.runQuery(internal.sessions.getSessionById, {
+          sessionId: participant.sessionId,
+        });
+        if (session) {
+          await _ctx.runAction(internal.notifications.sendPayerConfirmation, {
+            payerEmail: participant.payerEmail,
+            payerName: participant.name,
+            sessionName: session.name,
+            amountKobo: participant.amountOwed,
+            paymentRef,
+          });
+        }
+      }
+    } catch (emailErr) {
+      console.warn("Bachs webhook: payer confirmation email failed (non-fatal):", emailErr);
     }
 
     return new Response("OK", { status: 200 });

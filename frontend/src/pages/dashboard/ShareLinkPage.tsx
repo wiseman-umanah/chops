@@ -28,13 +28,21 @@ export default function ShareLinkPage() {
   const shareUrl = slug ? payUrl(slug) : ''
   const waMessage = `Hey! Settle your share for "${title}" on Chop 👉 ${shareUrl}`
 
-  const [copied, setCopied] = useState(false)
+  const [copied,      setCopied]      = useState(false)
+  const [copiedCode,  setCopiedCode]  = useState(false)
 
   function handleCopy() {
     if (!shareUrl) return
     navigator.clipboard.writeText(shareUrl).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  function handleCopyCode() {
+    if (!slug) return
+    navigator.clipboard.writeText(slug).catch(() => {})
+    setCopiedCode(true)
+    setTimeout(() => setCopiedCode(false), 2000)
   }
 
   function handleWhatsApp() {
@@ -70,7 +78,21 @@ export default function ShareLinkPage() {
           <h2 className="text-[20px] font-bold text-neutral-900 mb-1">{title}</h2>
 
           {slug && (
-            <p className="text-[12px] text-neutral-400 font-mono mb-5">{slug}</p>
+            <div className="flex items-center gap-2 mb-5">
+              <p className="text-[12px] text-neutral-400 font-mono">{slug}</p>
+              <button
+                onClick={handleCopyCode}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors border"
+                style={copiedCode
+                  ? { background: '#dcfce7', color: '#166534', borderColor: '#bbf7d0' }
+                  : { background: '#f5f5f5', color: '#6b7280', borderColor: '#e5e7eb' }
+                }
+                title="Copy session code"
+              >
+                <RemixIcon name={copiedCode ? 'ri-check-line' : 'ri-file-copy-line'} size={11} color={copiedCode ? '#16a34a' : '#6b7280'} />
+                {copiedCode ? 'Copied!' : 'Copy code'}
+              </button>
+            </div>
           )}
 
           {/* URL + copy button */}
