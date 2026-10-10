@@ -1,3 +1,5 @@
+![alt image](og-image.webp)
+
 # Chop
 
 **Chop** is a group payment splitting app built for Nigerian users. Create a session, share a link, and everyone pays their share — no app download required.
