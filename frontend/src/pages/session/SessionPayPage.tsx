@@ -107,6 +107,7 @@ export default function SessionPayPage() {
   const [paying,       setPaying]      = useState(false)
   const [payError,     setPayError]    = useState<string | null>(null)
   const [payerEmail,   setPayerEmail]  = useState('')
+  const [emailTouched, setEmailTouched] = useState(false)
   // chop-in only: contributor name + amount in naira
   const [contribution, setContribution] = useState('')
   const [chopInName,   setChopInName]  = useState('')
@@ -164,9 +165,12 @@ export default function SessionPayPage() {
 
   const sessionId = session._id
 
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail.trim())
+
   async function handlePay() {
     if (isChopIn && contributionKobo < effectiveMin) return
     if (!isChopIn && !currentParticipant) return
+    if (!emailValid) { setEmailTouched(true); return }
 
     setPayError(null)
     setPaying(true)
@@ -411,11 +415,20 @@ export default function SessionPayPage() {
                 type="email"
                 placeholder="you@example.com"
                 value={payerEmail}
-                onChange={e => setPayerEmail(e.target.value)}
-                className="w-full border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none transition-colors bg-white"
-                onFocus={e => { e.currentTarget.style.borderColor = accentColor }}
-                onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                onChange={e => { setPayerEmail(e.target.value); setEmailTouched(false) }}
+                className="w-full border rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none transition-colors bg-white"
+                style={{
+                  borderColor: emailTouched && !emailValid ? '#dc2626' : undefined,
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = emailTouched && !emailValid ? '#dc2626' : accentColor }}
+                onBlur={e => {
+                  setEmailTouched(true)
+                  e.currentTarget.style.borderColor = payerEmail.trim() && !emailValid ? '#dc2626' : ''
+                }}
               />
+              {emailTouched && !emailValid && payerEmail.trim() && (
+                <p className="text-[12px] text-red-600 mt-1.5 px-1">Please enter a valid email address</p>
+              )}
             </div>
 
             {/* Payment info */}
@@ -441,7 +454,7 @@ export default function SessionPayPage() {
 
             <button
               onClick={handlePay}
-              disabled={paying || !payerEmail.trim() || (isChopIn && contributionKobo < effectiveMin)}
+              disabled={paying || !emailValid || (isChopIn && contributionKobo < effectiveMin)}
               className="w-full py-4 rounded-full text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               style={{ background: accentColor }}
             >

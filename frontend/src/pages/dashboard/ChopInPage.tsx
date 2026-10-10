@@ -1,6 +1,6 @@
 import RemixIcon from '@/components/RemixIcon'
 import { Seo } from '@/hooks/useSeo'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
@@ -21,6 +21,14 @@ function formatNaira(n: number) {
 const inputCls =
   'w-full border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:border-[#00C950] transition-colors bg-white'
 
+const inputErrCls =
+  'w-full border border-red-400 rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:border-[#00C950] transition-colors bg-white'
+
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null
+  return <p className="text-[12px] text-red-500 mt-1.5 px-1">{msg}</p>
+}
+
 export default function ChopInPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -37,13 +45,33 @@ export default function ChopInPage() {
   )
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState<string | null>(null)
+  const [submitted, setSubmitted] = useState(false)
+
+  // Refs for scroll-to-error
+  const titleRef = useRef<HTMLDivElement>(null)
+  const goalRef  = useRef<HTMLDivElement>(null)
 
   const totalNaira = parseInt(goalAmount.replace(/\D/g, ''), 10) || 0
   const totalKobo  = totalNaira * 100
 
+  // Derived field errors — only visible after first submit attempt
+  const titleErr = submitted && !title.trim() ? 'Session title is required' : undefined
+  const goalErr  = submitted && totalNaira <= 0 ? 'Target amount is required' : undefined
+
+  const canSubmit = title.trim() && totalNaira > 0
+
   async function handleSubmit() {
-    if (!title.trim()) { setError('Session title is required'); return }
-    if (totalNaira <= 0) { setError('Goal amount must be greater than 0'); return }
+    setSubmitted(true)
+
+    if (!title.trim()) {
+      titleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (totalNaira <= 0) {
+      goalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
     setError(null)
     setLoading(true)
     try {
@@ -97,26 +125,33 @@ export default function ChopInPage() {
         {/* ── Left column ─────────────────────────────────────────────────── */}
         <div className="w-full lg:w-[60%] min-w-0 flex flex-col gap-4">
 
-          <div className="border border-neutral-200 rounded-2xl p-6">
+          {/* Session title */}
+          <div ref={titleRef} className="border border-neutral-200 rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-4">
               <RemixIcon name="ri-hand-coin-fill" size={20} color={BRAND} />
               <span className="text-[14px] font-bold text-neutral-700">
                 {isEditMode ? 'Edit Chop In' : 'Chop In'}
               </span>
             </div>
-            <label className="block text-[13px] font-bold text-neutral-800 mb-1.5">Session Title</label>
+            <label className="block text-[13px] font-bold text-neutral-800 mb-1.5">
+              Session Title <span className="text-red-500">*</span>
+            </label>
             <input
-              className={inputCls}
+              className={titleErr ? inputErrCls : inputCls}
               placeholder="e.g. Ada's birthday gift"
               value={title}
               onChange={e => setTitle(e.target.value)}
             />
+            <FieldError msg={titleErr} />
           </div>
 
-          <div className="border border-neutral-200 rounded-2xl p-6">
-            <h3 className="text-[15px] font-bold text-neutral-900 mb-4">Target amount (₦)</h3>
+          {/* Target amount */}
+          <div ref={goalRef} className="border border-neutral-200 rounded-2xl p-6">
+            <h3 className="text-[15px] font-bold text-neutral-900 mb-4">
+              Target Amount (₦) <span className="text-red-500">*</span>
+            </h3>
             <input
-              className={inputCls}
+              className={goalErr ? inputErrCls : inputCls}
               inputMode="numeric"
               placeholder="e.g. 50000"
               value={goalAmount}
@@ -125,13 +160,14 @@ export default function ChopInPage() {
                 setGoalAmount(raw)
               }}
             />
+            <FieldError msg={goalErr} />
             <p className="text-[12px] text-neutral-400 mt-2">
               A 10% platform fee is applied when you withdraw funds.
             </p>
           </div>
 
           {error && (
-            <div className="rounded-2xl px-5 py-3 text-[13px] font-medium" style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>
+            <div className="rounded-2xl px-5 py-3 text-[13px] font-medium" style={{ background: '#fff1f2', color: '#be123c' }}>
               {error}
             </div>
           )}
@@ -165,7 +201,7 @@ export default function ChopInPage() {
 
             <button
               onClick={handleSubmit}
-              disabled={!title.trim() || totalNaira === 0 || loading}
+              disabled={(!canSubmit && !submitted) || loading}
               className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full text-[14px] font-bold bg-white transition-opacity hover:opacity-90 disabled:opacity-40"
               style={{ color: '#FF6900' }}
             >

@@ -41,6 +41,14 @@ function formatNaira(n: number) {
 const inputCls =
   'w-full border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:border-[#FF6900] transition-colors bg-white'
 
+const inputErrCls =
+  'w-full border border-red-400 rounded-full px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:border-[#FF6900] transition-colors bg-white'
+
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null
+  return <p className="text-[12px] text-red-500 mt-1.5 px-1">{msg}</p>
+}
+
 function computeFeePerParticipant(totalKobo: number, n: number): number {
   if (n === 0) return 0
   let totalFee: number
@@ -163,6 +171,12 @@ export default function ChopFoodPage() {
   )
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState<string | null>(null)
+  const [submitted, setSubmitted] = useState(false)
+
+  // Refs for scroll-to-error
+  const titleRef        = useRef<HTMLDivElement>(null)
+  const participantsRef = useRef<HTMLDivElement>(null)
+  const menuRef         = useRef<HTMLDivElement>(null)
 
   const namedPeople = useMemo(
     () => participantsRaw.split(',').map(s => s.trim()).filter(Boolean),
@@ -176,6 +190,14 @@ export default function ChopFoodPage() {
   const total         = subtotal + tax + tip
   const totalKobo     = total * 100
   const feePerParticipantKobo = computeFeePerParticipant(totalKobo, namedPeople.length)
+
+  // Derived field errors — only visible after first submit attempt
+  const hasMenuItems = items.some(it => it.name.trim())
+  const titleErr        = submitted && !title.trim() ? 'Session title is required' : undefined
+  const participantErr  = submitted && namedPeople.length === 0 ? 'Add at least one participant' : undefined
+  const menuErr         = submitted && !hasMenuItems ? 'Add at least one menu item' : undefined
+
+  const canSubmit = title.trim() && namedPeople.length > 0 && hasMenuItems
 
   const perPerson = useMemo(() => {
     const totals: Record<string, number> = {}
@@ -209,8 +231,20 @@ export default function ChopFoodPage() {
   }
 
   async function handleSubmit() {
-    if (!title.trim()) { setError('Session title is required'); return }
-    if (namedPeople.length === 0) { setError('Add at least one participant'); return }
+    setSubmitted(true)
+
+    if (!title.trim()) {
+      titleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (namedPeople.length === 0) {
+      participantsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (!items.some(it => it.name.trim())) {
+      menuRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
 
     const convexParticipants: { name: string; items: { name: string; price: number }[] }[] =
       namedPeople.map(p => {
@@ -283,35 +317,43 @@ export default function ChopFoodPage() {
         {/* ── Left column ─────────────────────────────────────────────────── */}
         <div className="w-full lg:w-[60%] min-w-0 flex flex-col gap-4">
 
-          <div className="border border-neutral-200 rounded-2xl p-6">
+          <div ref={titleRef} className="border border-neutral-200 rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-4">
               <RemixIcon name='ri-restaurant-2-fill' size={20} color={BRAND} />
               <span className="text-[14px] font-bold text-neutral-700">
                 {isEditMode ? 'Edit Chop Food' : 'Chop Food'}
               </span>
             </div>
-            <label className="block text-[13px] font-bold text-neutral-800 mb-1.5">Session Title</label>
+            <label className="block text-[13px] font-bold text-neutral-800 mb-1.5">
+              Session Title <span className="text-red-500">*</span>
+            </label>
             <input
-              className={inputCls}
+              className={titleErr ? inputErrCls : inputCls}
               placeholder="e.g. Team lunch at Chicken Republic"
               value={title}
               onChange={e => setTitle(e.target.value)}
             />
+            <FieldError msg={titleErr} />
           </div>
 
-          <div className="border border-neutral-200 rounded-2xl p-6">
-            <h3 className="text-[15px] font-bold text-neutral-900 mb-4">Participants</h3>
+          <div ref={participantsRef} className="border border-neutral-200 rounded-2xl p-6">
+            <h3 className="text-[15px] font-bold text-neutral-900 mb-4">
+              Participants <span className="text-red-500">*</span>
+            </h3>
             <input
-              className={inputCls}
+              className={participantErr ? inputErrCls : inputCls}
               placeholder="e.g. Tunde, Amaka, Seun"
               value={participantsRaw}
               onChange={e => setParticipantsRaw(e.target.value)}
             />
+            <FieldError msg={participantErr} />
             <p className="text-[12px] text-neutral-400 mt-2">Separate each participant by a comma</p>
           </div>
 
-          <div className="border border-neutral-200 rounded-2xl p-6">
-            <h3 className="text-[15px] font-bold text-neutral-900 mb-4">Menu</h3>
+          <div ref={menuRef} className="border border-neutral-200 rounded-2xl p-6">
+            <h3 className="text-[15px] font-bold text-neutral-900 mb-4">
+              Menu <span className="text-red-500">*</span>
+            </h3>
 
             {/* Desktop column headers — hidden on mobile */}
             <div className="hidden sm:grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr 80px 100px 140px 36px' }}>
@@ -431,6 +473,7 @@ export default function ChopFoodPage() {
             >
               + Add Item
             </button>
+            <FieldError msg={menuErr} />
           </div>
 
           <div className="border border-neutral-200 rounded-2xl p-6">
@@ -507,21 +550,21 @@ export default function ChopFoodPage() {
                 <span className="font-semibold">Tip</span>
                 <span className="font-semibold">{formatNaira(tip)}</span>
               </div>
-              {namedPeople.length > 0 && totalKobo > 0 && (
-                <div className="flex justify-between text-white/70 text-[13px]">
-                  <span>Platform fee / person</span>
-                  <span>{formatNaira(Math.round(feePerParticipantKobo / 100))}</span>
-                </div>
-              )}
               <div className="flex justify-between text-[15px] font-bold mt-1">
-                <span>Total</span>
+                <span>Total bill</span>
                 <span>{formatNaira(total)}</span>
               </div>
+              {namedPeople.length > 0 && totalKobo > 0 && (
+                <div className="flex justify-between text-white/70 text-[13px]">
+                  <span>+ Platform fee (split across participants)</span>
+                  <span>+{formatNaira(Math.round(feePerParticipantKobo / 100))}</span>
+                </div>
+              )}
             </div>
 
             <button
               onClick={handleSubmit}
-              disabled={!title.trim() || loading}
+              disabled={(!canSubmit && !submitted) || loading}
               className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full text-[14px] font-bold bg-white transition-opacity hover:opacity-90 disabled:opacity-40"
               style={{ color: BRAND }}
             >

@@ -286,15 +286,14 @@ export default function PaymentSuccessPage() {
               />
             </div>
 
-            {allParticipants.length > 0 && (
+            {/* Food/bill: show all participants with paid/unpaid status */}
+            {mode !== 'chop-in' && allParticipants.length > 0 && (
               <div className="flex flex-col gap-2">
                 {allParticipants.map((p, i) => (
                   <div key={i} className="flex items-center justify-between text-[13px]">
                     <div className="min-w-0">
                       <span className="font-medium text-neutral-800 truncate block">{p.name}</span>
-                      {mode !== 'chop-in' && (
-                        <span className="text-[11px] text-neutral-400">{formatNaira(p.amountOwed)}</span>
-                      )}
+                      <span className="text-[11px] text-neutral-400">{formatNaira(p.amountOwed)}</span>
                     </div>
                     {p.status === 'sent' ? (
                       <span className="flex items-center gap-1 text-[12px] px-2.5 py-0.5 rounded-full shrink-0"
@@ -309,6 +308,14 @@ export default function PaymentSuccessPage() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Chop-in: contributor count only, no names */}
+            {mode === 'chop-in' && paidCount > 0 && (
+              <div className="flex items-center gap-2 text-[13px] text-neutral-600">
+                <RemixIcon name="ri-group-line" size={15} color="#6b7280" />
+                <span>{paidCount} {paidCount === 1 ? 'person has' : 'people have'} contributed so far</span>
               </div>
             )}
 
