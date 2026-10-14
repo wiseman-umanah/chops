@@ -4,6 +4,7 @@ import { useQuery, useAction } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import RemixIcon from '@/components/RemixIcon'
 import { Seo } from '@/hooks/useSeo'
+import { computeFees } from '@/lib/fees'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -332,16 +333,31 @@ export default function SessionPayPage() {
               </div>
             </div>
 
-            {/* Your share card */}
-            {contributionKobo > 0 && (
-              <div
-                className="rounded-2xl px-6 py-5 text-white text-center mb-5"
-                style={{ background: accentColor }}
-              >
-                <p className="text-[13px] opacity-80 mb-1">Your Contribution</p>
-                <p className="text-[32px] font-bold">{formatNaira(contributionKobo)}</p>
-              </div>
-            )}
+            {/* Fee summary card — chop-in */}
+            {contributionKobo > 0 && (() => {
+              const fees = computeFees(contributionKobo)
+              return (
+                <div className="rounded-2xl border border-neutral-100 bg-neutral-50 px-5 py-4 mb-5 flex flex-col gap-2">
+                  <div className="flex justify-between text-[13px]">
+                    <span className="text-neutral-500">Your contribution</span>
+                    <span className="font-semibold text-neutral-800">{formatNaira(fees.amountDueKobo)}</span>
+                  </div>
+                  <div className="flex justify-between text-[13px]">
+                    <span className="text-neutral-500">Service fee (2%, max ₦2,000)</span>
+                    <span className="font-semibold text-neutral-500">{formatNaira(fees.platformFeeKobo)}</span>
+                  </div>
+                  <div className="flex justify-between text-[13px]">
+                    <span className="text-neutral-500">Processing (est.)</span>
+                    <span className="font-semibold text-neutral-500">{formatNaira(fees.estimatedBachsFeeKobo)}</span>
+                  </div>
+                  <div className="border-t border-neutral-200 pt-2 flex justify-between text-[14px]">
+                    <span className="font-bold text-neutral-800">Total to pay</span>
+                    <span className="font-extrabold" style={{ color: accentColor }}>{formatNaira(fees.estimatedTotalKobo)}</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 mt-1">Your contribution goes to the group. Service fee supports the app. Processing is charged by the payment provider.</p>
+                </div>
+              )
+            })()}
           </>
         )}
 
@@ -389,19 +405,33 @@ export default function SessionPayPage() {
               })}
             </div>
 
-            {/* Your share card */}
-            {currentParticipant && (
-              <div
-                className="rounded-2xl px-6 py-5 text-white text-center mb-5"
-                style={{ background: accentColor }}
-              >
-                <p className="text-[13px] opacity-80 mb-1">Your Share</p>
-                <p className="text-[32px] font-bold">{formatNaira(currentParticipant.amountOwed)}</p>
-                {currentParticipant.sharePercent !== undefined && (
-                  <p className="text-[12px] opacity-70 mt-0.5">{currentParticipant.sharePercent}% of total</p>
-                )}
-              </div>
-            )}
+            {/* Fee summary card — food / bill */}
+            {currentParticipant && (() => {
+              const fees = computeFees(currentParticipant.amountOwed)
+              return (
+                <div className="rounded-2xl border border-neutral-100 bg-neutral-50 px-5 py-4 mb-5 flex flex-col gap-2">
+                  <div className="flex justify-between text-[13px]">
+                    <span className="text-neutral-500">
+                      Your share{currentParticipant.sharePercent !== undefined ? ` (${currentParticipant.sharePercent}%)` : ''}
+                    </span>
+                    <span className="font-semibold text-neutral-800">{formatNaira(fees.amountDueKobo)}</span>
+                  </div>
+                  <div className="flex justify-between text-[13px]">
+                    <span className="text-neutral-500">Service fee (2%, max ₦2,000)</span>
+                    <span className="font-semibold text-neutral-500">{formatNaira(fees.platformFeeKobo)}</span>
+                  </div>
+                  <div className="flex justify-between text-[13px]">
+                    <span className="text-neutral-500">Processing (est.)</span>
+                    <span className="font-semibold text-neutral-500">{formatNaira(fees.estimatedBachsFeeKobo)}</span>
+                  </div>
+                  <div className="border-t border-neutral-200 pt-2 flex justify-between text-[14px]">
+                    <span className="font-bold text-neutral-800">Total to pay</span>
+                    <span className="font-extrabold" style={{ color: accentColor }}>{formatNaira(fees.estimatedTotalKobo)}</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 mt-1">Your share goes to the group. Service fee supports the app. Processing is charged by the payment provider.</p>
+                </div>
+              )
+            })()}
           </>
         )}
 
@@ -460,7 +490,11 @@ export default function SessionPayPage() {
             >
               {paying
                 ? 'Processing…'
-                : `Pay ${formatNaira(isChopIn ? contributionKobo : (currentParticipant?.amountOwed ?? 0))}`}
+                : (() => {
+                    const amtDue = isChopIn ? contributionKobo : (currentParticipant?.amountOwed ?? 0)
+                    const fees = computeFees(amtDue)
+                    return `Pay ${formatNaira(fees.checkoutAmountKobo)}`
+                  })()}
             </button>
           </>
         )}

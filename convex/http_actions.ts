@@ -116,11 +116,17 @@ export const bachsWebhook = httpAction(async (_ctx, request) => {
       reference: string | null;
       status: string;
       metadata: { participantId?: string; sessionId?: string };
+      fees?: { amount?: string };
     };
 
-    const { reference, charge_id, checkout_id, metadata } = data;
+    const { reference, charge_id, checkout_id, metadata, fees } = data;
     const { participantId } = metadata ?? {};
     const paymentRef = reference ?? charge_id ?? checkout_id ?? payload.id;
+
+    // Convert Bachs fee (NGN decimal string) to kobo — stored for reconciliation
+    const bachsFeeKobo = fees?.amount
+      ? Math.round(parseFloat(fees.amount) * 100)
+      : undefined;
 
     if (!participantId) {
       console.error("Bachs webhook: missing participantId in metadata", { eventId: payload.id });
@@ -131,6 +137,7 @@ export const bachsWebhook = httpAction(async (_ctx, request) => {
       await _ctx.runMutation(internal.participants.updateParticipantStatus, {
         participantId: participantId as never,
         paymentRef,
+        bachsFeeKobo,
       });
     } catch (err) {
       console.error("Bachs webhook: failed to update participant", err);

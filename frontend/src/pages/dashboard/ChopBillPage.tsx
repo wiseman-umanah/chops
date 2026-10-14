@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
+import { computeFees } from '@/lib/fees'
 
 const BRAND = '#FB2C36'
 
@@ -204,37 +205,27 @@ export default function ChopBillPage() {
   const totalKobo  = totalNaira * 100
   const count      = participants.length
 
-  function computeFeePerParticipant(total: number, n: number): number {
-    if (n === 0) return 0
-    let totalFee: number
-    if (total < 500_000)        totalFee = 10_000
-    else if (total < 1_000_000) totalFee = 15_000
-    else if (total < 2_000_000) totalFee = 20_000
-    else if (total < 5_000_000) totalFee = Math.round(total * 0.0075)
-    else                        totalFee = Math.round(total * 0.005)
-    return Math.round(totalFee / n)
-  }
-
-  const feePerParticipant = computeFeePerParticipant(totalKobo, count)
-
   const breakdown = useMemo(() => {
     if (splitType === 'equal') {
       const base = count > 0 ? Math.round(totalKobo / count) : 0
-      return participants.map(p => ({ name: p.name || '—', base, fee: feePerParticipant, total: base + feePerParticipant }))
+      const fee = computeFees(base).platformFeeKobo
+      return participants.map(p => ({ name: p.name || '—', base, fee, total: base + fee }))
     }
     if (splitType === 'percentage') {
       const pctTotal = participants.reduce((s, p) => s + (parseFloat(p.percent) || 0), 0)
       return participants.map(p => {
         const pct  = parseFloat(p.percent) || 0
         const base = Math.round(totalKobo * (pct / 100))
-        return { name: p.name || '—', base, fee: feePerParticipant, total: base + feePerParticipant, pct, pctTotal }
+        const fee  = computeFees(base).platformFeeKobo
+        return { name: p.name || '—', base, fee, total: base + fee, pct, pctTotal }
       })
     }
     return participants.map(p => {
       const base = Math.round((parseFloat(p.customAmount) || 0) * 100)
-      return { name: p.name || '—', base, fee: feePerParticipant, total: base + feePerParticipant }
+      const fee  = computeFees(base).platformFeeKobo
+      return { name: p.name || '—', base, fee, total: base + fee }
     })
-  }, [participants, splitType, totalKobo, feePerParticipant, count])
+  }, [participants, splitType, totalKobo, count])
 
   const pctSum    = useMemo(() => participants.reduce((s, p) => s + (parseFloat(p.percent) || 0), 0), [participants])
   const customSum = useMemo(() => participants.reduce((s, p) => s + (parseFloat(p.customAmount) || 0) * 100, 0), [participants])
@@ -500,18 +491,22 @@ export default function ChopBillPage() {
                 <span className="font-semibold">Total Bill</span>
                 <span className="font-semibold">{formatNaira(totalNaira)}</span>
               </div>
-              {totalKobo > 0 && count > 0 && (
-                <div className="flex justify-between text-white/70 text-[13px]">
-                  <span>+ Platform fee (split across participants)</span>
-                  <span>+{formatNaira(Math.round(feePerParticipant / 100))}</span>
-                </div>
-              )}
-              {totalKobo > 0 && count > 0 && (
-                <div className="flex justify-between text-[15px] font-bold mt-1 border-t border-white/20 pt-2">
-                  <span>Each person pays</span>
-                  <span>{formatNaira(Math.round((totalKobo / count + feePerParticipant) / 100))}</span>
-                </div>
-              )}
+              {totalKobo > 0 && count > 0 && (() => {
+                const sampleShare = Math.round(totalKobo / count)
+                const sampleFee   = computeFees(sampleShare).platformFeeKobo
+                return (
+                  <>
+                    <div className="flex justify-between text-white/70 text-[13px]">
+                      <span>+ Service fee per person (est. 2%)</span>
+                      <span>+{formatNaira(sampleFee)}</span>
+                    </div>
+                    <div className="flex justify-between text-[15px] font-bold mt-1 border-t border-white/20 pt-2">
+                      <span>Each person pays</span>
+                      <span>{formatNaira(sampleShare + sampleFee)}</span>
+                    </div>
+                  </>
+                )
+              })()}
               {!(totalKobo > 0 && count > 0) && (
                 <div className="flex justify-between text-[15px] font-bold mt-1">
                   <span>Participants</span>

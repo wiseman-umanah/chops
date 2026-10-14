@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { action, internalMutation, internalQuery, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
+import { BACHS_WITHDRAWAL_FEE_KOBO } from "./fees";
 
 const BACHS_API_BASE =
   process.env.BACHS_ENV === "production"
@@ -55,19 +56,13 @@ export const listCompletedChopIn = query({
         const collectedKobo = participants
           .filter((p) => p.status === "sent")
           .reduce((s, p) => s + p.amountOwed, 0);
-        const chopFeeKobo = session.feePercent
-          ? Math.round(collectedKobo * (session.feePercent / 100))
-          : 0;
-        // ₦50 flat Bachs bank transfer fee — deducted from payout so our wallet self-funds
-        const bachsTransferFeeKobo = 5000;
-        const feeKobo = chopFeeKobo + bachsTransferFeeKobo;
+        // Only ₦50 flat Bachs withdrawal fee — no platform % at withdrawal (collected at contribution time)
         return {
           ...session,
           collectedKobo,
-          chopFeeKobo,
-          bachsTransferFeeKobo,
-          feeKobo,
-          payoutKobo: collectedKobo - feeKobo,
+          bachsTransferFeeKobo: BACHS_WITHDRAWAL_FEE_KOBO,
+          feeKobo: BACHS_WITHDRAWAL_FEE_KOBO,
+          payoutKobo: collectedKobo - BACHS_WITHDRAWAL_FEE_KOBO,
         };
       })
     );
@@ -260,12 +255,8 @@ export const requestPayout = action({
     const collectedKobo = participants
       .filter((p) => p.status === "sent")
       .reduce((s, p) => s + p.amountOwed, 0);
-    const chopFeeKobo = session.feePercent
-      ? Math.round(collectedKobo * (session.feePercent / 100))
-      : 0;
-    // ₦50 flat Bachs bank transfer fee — deducted from payout so our wallet self-funds
-    const bachsTransferFeeKobo = 5000;
-    const payoutKobo = collectedKobo - chopFeeKobo - bachsTransferFeeKobo;
+    // Only ₦50 flat Bachs withdrawal fee — platform fee was collected at contribution time
+    const payoutKobo = collectedKobo - BACHS_WITHDRAWAL_FEE_KOBO;
     // Bachs wants decimal string at currency precision
     const amountStr = (payoutKobo / 100).toFixed(2);
 

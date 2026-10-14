@@ -86,8 +86,10 @@ export const updateParticipantStatus = internalMutation({
   args: {
     participantId: v.id("participants"),
     paymentRef: v.string(),
+    /** Actual Bachs processing fee from the webhook (converted to kobo) — stored for reconciliation */
+    bachsFeeKobo: v.optional(v.number()),
   },
-  handler: async (ctx, { participantId, paymentRef }) => {
+  handler: async (ctx, { participantId, paymentRef, bachsFeeKobo }) => {
     const participant = await ctx.db.get(participantId);
     if (!participant) throw new Error("Participant not found");
 
@@ -97,7 +99,9 @@ export const updateParticipantStatus = internalMutation({
       return;
     }
 
-    await ctx.db.patch(participantId, { status: "sent", paymentRef });
+    const patch: Record<string, unknown> = { status: "sent", paymentRef };
+    if (bachsFeeKobo !== undefined) patch.bachsFeeKobo = bachsFeeKobo;
+    await ctx.db.patch(participantId, patch);
 
     const session = await ctx.db.get(participant.sessionId);
     if (!session) return; // session deleted mid-flight — nothing to do

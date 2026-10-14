@@ -4,44 +4,6 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fee logic
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Compute the flat fee per participant for Chop Food and Chop Bill.
- *
- * Tier table (total = sum of all items incl. tax + tip, in kobo):
- *   < ₦5,000  (500_000 kobo)  → ₦100  (10_000 kobo)
- *   < ₦10,000 (1_000_000)     → ₦150  (15_000 kobo)
- *   < ₦20,000 (2_000_000)     → ₦200  (20_000 kobo)
- *   < ₦50,000 (5_000_000)     → 0.75% of total (rounded to nearest kobo)
- *   ≥ ₦50,000                 → 0.5%  of total
- *
- * The fee is per-participant (each person pays it on top of their share).
- */
-function computeFlatFeePerParticipant(
-  totalKobo: number,
-  participantCount: number
-): number {
-  if (participantCount === 0) return 0;
-
-  let totalFee: number;
-  if (totalKobo < 500_000) {
-    totalFee = 10_000; // ₦100
-  } else if (totalKobo < 1_000_000) {
-    totalFee = 15_000; // ₦150
-  } else if (totalKobo < 2_000_000) {
-    totalFee = 20_000; // ₦200
-  } else if (totalKobo < 5_000_000) {
-    totalFee = Math.round(totalKobo * 0.0075); // 0.75%
-  } else {
-    totalFee = Math.round(totalKobo * 0.005); // 0.5%
-  }
-
-  return Math.round(totalFee / participantCount);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Slug generation
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -173,22 +135,9 @@ export const createSession = mutation({
         .unique();
     }
 
-    // ── Fee computation ───────────────────────────────────────────────────
-
-    let feePerParticipant: number | undefined;
-    let feePercent: number | undefined;
-
-    if (mode === "food" || mode === "bill") {
-      feePerParticipant = computeFlatFeePerParticipant(
-        totalAmount,
-        participants.length
-      );
-    } else {
-      // chop-in: 1.5% charged at withdrawal, not on each participant
-      feePercent = 1.5;
-    }
-
     // ── Insert session ────────────────────────────────────────────────────
+    // feePerParticipant and feePercent are no longer set — fees are computed
+    // at checkout time (2% capped at ₦2,000) in initiateCheckout.
 
     const sessionId = await ctx.db.insert("sessions", {
       slug,
@@ -201,11 +150,11 @@ export const createSession = mutation({
       splitType: mode === "bill" ? splitType : undefined,
       organizerId: userId,
       status: "active",
-      feePerParticipant,
-      feePercent,
     });
 
     // ── Insert participants ───────────────────────────────────────────────
+    // amountOwed = pure share only (no fee baked in).
+    // The 2% platform fee is added at checkout time in initiateCheckout.
 
     for (const p of participants) {
       if (mode === "food") {
@@ -213,13 +162,10 @@ export const createSession = mutation({
         const fp = p as FoodP;
         const itemsTotal = fp.items.reduce((s, item) => s + item.price, 0);
         // Denominator must be the items subtotal (gross minus tax+tip), not the gross total.
-        // Using gross causes each participant's pro-rata tax to sum to less than the actual
-        // tax+tip — the organizer collects less than the session total on every food split.
         const taxTip = (taxKobo ?? 0) + (tipKobo ?? 0);
         const itemsSubtotal = totalAmount - taxTip;
         const taxTipRatio = itemsSubtotal > 0 ? taxTip / itemsSubtotal : 0;
-        const share = Math.round(itemsTotal * (1 + taxTipRatio));
-        const amountOwed = share + (feePerParticipant ?? 0);
+        const amountOwed = Math.round(itemsTotal * (1 + taxTipRatio));
         await ctx.db.insert("participants", {
           sessionId,
           name: fp.name,
@@ -234,36 +180,33 @@ export const createSession = mutation({
           amountOwed?: number;
         };
         const bp = p as BillP;
-        let base = 0;
+        let amountOwed = 0;
         let sharePercent: number | undefined;
 
         if (splitType === "equal") {
-          base = Math.round(totalAmount / participants.length);
+          amountOwed = Math.round(totalAmount / participants.length);
         } else if (splitType === "percentage") {
           sharePercent = bp.sharePercent!;
-          base = Math.round(totalAmount * (sharePercent / 100));
+          amountOwed = Math.round(totalAmount * (sharePercent / 100));
         } else {
           // custom — amountOwed already provided by caller in kobo
-          base = bp.amountOwed ?? 0;
+          amountOwed = bp.amountOwed ?? 0;
         }
 
         await ctx.db.insert("participants", {
           sessionId,
           name: bp.name,
-          amountOwed: base + (feePerParticipant ?? 0),
+          amountOwed,
           status: "pending",
           sharePercent,
         });
       } else {
-        // chop-in — no pre-set amountOwed per participant; contributions are flexible
-        type ChopInP = { name: string; contributionAmount?: number };
-        const cp = p as ChopInP;
+        // chop-in — amountOwed is 0 at creation; set to contribution at checkout time
         await ctx.db.insert("participants", {
           sessionId,
-          name: cp.name,
-          amountOwed: cp.contributionAmount ?? goalAmount ?? 0,
+          name: (p as { name: string }).name,
+          amountOwed: 0,
           status: "pending",
-          contributionAmount: cp.contributionAmount,
         });
       }
     }
@@ -357,55 +300,49 @@ export const editSession = mutation({
         await ctx.db.delete(ep._id);
       }
 
-      const newFee = computeFlatFeePerParticipant(newTotal, participants.length);
-      await ctx.db.patch(sessionId, { feePerParticipant: newFee });
-
+      // amountOwed = pure share — no fee baked in (fee computed at checkout time)
       for (const p of participants) {
         if (mode === "food") {
           type FoodP = { name: string; items: { name: string; price: number }[] };
           const fp = p as FoodP;
           const itemsTotal = fp.items.reduce((s: number, item: { price: number }) => s + item.price, 0);
-          // Use itemsSubtotal (gross minus tax+tip) as denominator — same fix as createSession.
           const taxTip = newTax + newTip;
           const itemsSubtotal = newTotal - taxTip;
           const taxTipRatio = itemsSubtotal > 0 ? taxTip / itemsSubtotal : 0;
-          const share = Math.round(itemsTotal * (1 + taxTipRatio));
+          const amountOwed = Math.round(itemsTotal * (1 + taxTipRatio));
           await ctx.db.insert("participants", {
             sessionId,
             name: fp.name,
-            amountOwed: share + newFee,
+            amountOwed,
             status: "pending",
             items: fp.items,
           });
         } else if (mode === "bill") {
           type BillP = { name: string; sharePercent?: number; amountOwed?: number };
           const bp = p as BillP;
-          let base = 0;
+          let amountOwed = 0;
           let sharePercent: number | undefined;
           if (session.splitType === "equal") {
-            base = Math.round(newTotal / participants.length);
+            amountOwed = Math.round(newTotal / participants.length);
           } else if (session.splitType === "percentage") {
             sharePercent = bp.sharePercent!;
-            base = Math.round(newTotal * (sharePercent / 100));
+            amountOwed = Math.round(newTotal * (sharePercent / 100));
           } else {
-            base = bp.amountOwed ?? 0;
+            amountOwed = bp.amountOwed ?? 0;
           }
           await ctx.db.insert("participants", {
             sessionId,
             name: bp.name,
-            amountOwed: base + newFee,
+            amountOwed,
             status: "pending",
             sharePercent,
           });
         } else {
-          type ChopInP = { name: string; contributionAmount?: number };
-          const cp = p as ChopInP;
           await ctx.db.insert("participants", {
             sessionId,
-            name: cp.name,
-            amountOwed: cp.contributionAmount ?? goalAmount ?? session.goalAmount ?? 0,
+            name: (p as { name: string }).name,
+            amountOwed: 0,
             status: "pending",
-            contributionAmount: cp.contributionAmount,
           });
         }
       }

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { action, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { computeFees } from "./fees";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -46,9 +47,7 @@ export const reserveChopInParticipant = internalMutation({
 
 /**
  * Internal helper — patches payerEmail onto a food/bill participant row
- * from inside the initiateCheckout action. Bypasses the ownership check
- * that the public patchPayerEmail mutation requires (since actions don't
- * have a user identity in the same way).
+ * from inside the initiateCheckout action.
  */
 export const internalPatchPayerEmail = internalMutation({
   args: {
@@ -59,6 +58,23 @@ export const internalPatchPayerEmail = internalMutation({
     const participant = await ctx.db.get(participantId);
     if (!participant) throw new Error("Participant not found");
     await ctx.db.patch(participantId, { payerEmail });
+  },
+});
+
+/**
+ * Internal helper — stores the platform fee on a participant row after
+ * checkout is initiated. Kept separate so initiateCheckout (action) can
+ * write back to the DB without embedding a full mutation inline.
+ */
+export const internalPatchPlatformFee = internalMutation({
+  args: {
+    participantId: v.id("participants"),
+    platformFeeKobo: v.number(),
+  },
+  handler: async (ctx, { participantId, platformFeeKobo }) => {
+    const participant = await ctx.db.get(participantId);
+    if (!participant) throw new Error("Participant not found");
+    await ctx.db.patch(participantId, { platformFeeKobo });
   },
 });
 
@@ -110,7 +126,7 @@ export const initiateCheckout = action({
     // ── Resolve participant and amount ──────────────────────────────────────
 
     let resolvedParticipantId: string;
-    let amountKobo: number;
+    let amountDueKobo: number;
     let payerName: string;
 
     if (args.participantId) {
@@ -122,7 +138,7 @@ export const initiateCheckout = action({
       if (!participant) throw new Error("Participant not found");
       if (participant.status === "sent") throw new Error("Already paid");
       resolvedParticipantId = args.participantId;
-      amountKobo = participant.amountOwed;
+      amountDueKobo = participant.amountOwed; // pure share, no fee baked in
       payerName = args.payerName ?? participant.name;
       // Store payer email on the existing participant row so the webhook can use it
       if (args.payerEmail) {
@@ -143,17 +159,27 @@ export const initiateCheckout = action({
         payerEmail: args.payerEmail,
       });
       resolvedParticipantId = newId;
-      amountKobo = args.amountKobo;
+      amountDueKobo = args.amountKobo; // pure contribution, no fee baked in
       payerName = args.contributorName ?? "Anonymous";
     }
 
+    // ── Compute platform fee and checkout amount ───────────────────────────
+    // Platform fee = 2% of amountDue, capped at ₦2,000.
+    // checkoutAmount = amountDue + platformFee — what we send to Bachs.
+    // Bachs adds its own processing on top (customer_bears_fee: true).
+    const fees = computeFees(amountDueKobo);
+
+    // Store platformFeeKobo on the participant row for audit/ledgering
+    await ctx.runMutation(internal.payments.internalPatchPlatformFee, {
+      participantId: resolvedParticipantId as never,
+      platformFeeKobo: fees.platformFeeKobo,
+    });
+
     // ── Convert kobo → NGN string (Bachs uses currency units, not subunits) ──
-    // e.g. 75000 kobo → "750.00"
-    const amountStr = (amountKobo / 100).toFixed(2);
+    // We send checkoutAmount (share + platform fee); Bachs adds processing on top.
+    const amountStr = (fees.checkoutAmountKobo / 100).toFixed(2);
 
     // ── Build Bachs request body ────────────────────────────────────────────
-    // customer requires either email or customer_id — omit the field entirely
-    // if we have neither (Bachs allows anonymous checkout with pricing-only sessions).
     const customer = args.payerEmail
       ? { email: args.payerEmail, name: payerName }
       : undefined;
@@ -171,6 +197,8 @@ export const initiateCheckout = action({
         currency: "NGN",
         amount: amountStr,
       },
+      // Bachs adds its 1.5% processing on top; payer sees total on Bachs hosted page
+      customer_bears_fee: true,
       success_url: successUrl,
       cancel_url: args.cancelUrl,
       // Echoed back verbatim in webhook data.metadata
