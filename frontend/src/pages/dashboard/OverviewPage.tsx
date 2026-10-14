@@ -317,8 +317,25 @@ export default function OverviewPage() {
     filter === 'all' ? {} : { status: filter },
   )
 
-  const deleteSession  = useMutation(api.sessions.deleteSession)
-  const closeSessionFn = useMutation(api.sessions.closeSession)
+  const deleteSession    = useMutation(api.sessions.deleteSession)
+  const closeSessionFn   = useMutation(api.sessions.closeSession)
+  const generateRefCode  = useMutation(api.referrals.generateReferralCode)
+  const recordReferral   = useMutation(api.referrals.recordReferral)
+
+  // After Google OAuth redirect: auto-generate a referral code for the new user
+  // and record any pending referral that was stored before the redirect.
+  useEffect(() => {
+    // Always ensure this user has a referral code (idempotent — no-ops if already exists)
+    generateRefCode().catch(() => {})
+
+    // Pick up a referral code that was saved before the Google OAuth redirect
+    const pendingRef = sessionStorage.getItem('chops_pending_ref')
+    if (pendingRef && pendingRef.length === 6) {
+      sessionStorage.removeItem('chops_pending_ref')
+      recordReferral({ code: pendingRef }).catch(() => {})
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // run once on mount — mutations are stable references
 
   const activeChops = stats?.activeChops ?? 0
   const pendingKobo = stats?.pendingKobo ?? 0

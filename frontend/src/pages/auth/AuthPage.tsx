@@ -241,7 +241,8 @@ function LoginForm() {
 // ── Signup form ───────────────────────────────────────────────────────────────
 function SignupForm({ initialRef }: { initialRef: string }) {
   const { signIn } = useAuthActions()
-  const recordReferral = useMutation(api.referrals.recordReferral)
+  const recordReferral    = useMutation(api.referrals.recordReferral)
+  const generateRefCode   = useMutation(api.referrals.generateReferralCode)
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName]   = useState('')
@@ -308,6 +309,8 @@ function SignupForm({ initialRef }: { initialRef: string }) {
         lastName: lastName.trim() || '',
         phone: phone || '',
       })
+      // Auto-generate a referral code for the new user immediately
+      generateRefCode().catch(() => {})
       // Record referral after successful signup if a code was provided
       if (refCode.trim().length === 6) {
         await recordReferral({ code: refCode.trim() }).catch(() => {
@@ -329,10 +332,15 @@ function SignupForm({ initialRef }: { initialRef: string }) {
   async function handleGoogle() {
     setError('')
     setLoading(true)
+    // Persist ref code across the OAuth redirect so OverviewPage can pick it up
+    if (refCode.trim().length === 6) {
+      sessionStorage.setItem('chops_pending_ref', refCode.trim())
+    }
     try {
       await signIn('google', { redirectTo: window.location.origin + '/dashboard' })
     } catch (err) {
       console.error('Google sign-in error:', err)
+      sessionStorage.removeItem('chops_pending_ref')
       setError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.')
       setLoading(false)
     }
