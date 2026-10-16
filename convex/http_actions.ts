@@ -260,6 +260,39 @@ export const bachsWebhook = httpAction(async (_ctx, request) => {
     return new Response("OK", { status: 200 });
   }
 
+  // ── checkout.expired / checkout.failed ───────────────────────────────────
+  // Bachs fires these when a checkout session times out or the payment fails.
+  // For chop-in sessions we pre-insert a pending participant row before the
+  // redirect — if the payer abandons, that row must be cleaned up immediately
+  // rather than waiting for the nightly cron.
+  // Food/bill participants already exist and are NOT deleted on expiry (the
+  // organizer set them up; they can try paying again via the same link).
+
+  if (payload.type === "checkout.expired" || payload.type === "checkout.failed") {
+    const data = payload.data as {
+      checkout_id?: string;
+      metadata?: { participantId?: string; sessionId?: string };
+    };
+
+    const { participantId } = data.metadata ?? {};
+
+    if (!participantId) {
+      // No metadata — nothing we can do, acknowledge silently
+      return new Response("OK", { status: 200 });
+    }
+
+    try {
+      await _ctx.runMutation(internal.participants.deleteAbandonedChopInParticipant, {
+        participantId: participantId as never,
+      });
+    } catch (err) {
+      // Non-fatal — log and acknowledge so Bachs doesn't retry indefinitely
+      console.warn(`Bachs ${payload.type}: cleanup failed for participant ${participantId}:`, err);
+    }
+
+    return new Response("OK", { status: 200 });
+  }
+
   // All other event types — acknowledge without acting
   return new Response("OK", { status: 200 });
 });

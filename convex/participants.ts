@@ -148,3 +148,37 @@ export const updateParticipantStatus = internalMutation({
 
 // patchPayerEmail removed — email patching is handled internally by
 // internalPatchPayerEmail in payments.ts (called from initiateCheckout action).
+
+/**
+ * Deletes a pending chop-in participant row when a checkout.expired or
+ * checkout.failed webhook arrives from Bachs.
+ *
+ * Guards:
+ *  - Only deletes if the participant is still "pending" (never paid)
+ *  - Only deletes chop-in participants (food/bill participants are organizer-set
+ *    and must not be removed just because one payment attempt failed)
+ *  - Safe to call multiple times — second call finds nothing and returns silently
+ */
+export const deleteAbandonedChopInParticipant = internalMutation({
+  args: { participantId: v.id("participants") },
+  handler: async (ctx, { participantId }) => {
+    const participant = await ctx.db.get(participantId);
+    if (!participant) return; // already deleted or never existed
+
+    // Only remove if still pending (not paid)
+    if (participant.status === "sent") {
+      console.log(`deleteAbandonedChopInParticipant: ${participantId} already paid — skipping`);
+      return;
+    }
+
+    // Only remove chop-in participants — food/bill participants are organizer-managed
+    const session = await ctx.db.get(participant.sessionId);
+    if (!session || session.mode !== "chop-in") {
+      console.log(`deleteAbandonedChopInParticipant: ${participantId} is not a chop-in participant — skipping`);
+      return;
+    }
+
+    await ctx.db.delete(participantId);
+    console.log(`deleteAbandonedChopInParticipant: deleted abandoned participant ${participantId}`);
+  },
+});

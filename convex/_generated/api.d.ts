@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as backfill_referrals from "../backfill_referrals.js";
 import type * as crons from "../crons.js";
 import type * as fees from "../fees.js";
 import type * as http from "../http.js";
@@ -30,6 +31,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  backfill_referrals: typeof backfill_referrals;
   crons: typeof crons;
   fees: typeof fees;
   http: typeof http;

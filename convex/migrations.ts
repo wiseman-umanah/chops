@@ -2,13 +2,13 @@
  * One-time data migrations.
  *
  * Run via Convex dashboard or CLI:
- *   npx convex run convex/migrations:migrateUnpaidParticipants
  *   npx convex run convex/migrations:auditLegacySessions
+ *   npx convex run convex/migrations:migrateUnpaidParticipants
  *
  * All mutations here are idempotent — safe to run multiple times.
  */
 
-import { internalMutation, internalQuery } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 
 /**
  * Strips the old baked-in feePerParticipant from every PENDING participant
@@ -23,7 +23,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
  * Idempotency: participants whose session has no feePerParticipant are skipped.
  * Already-paid participants (status "sent") are untouched.
  */
-export const migrateUnpaidParticipants = internalMutation({
+export const migrateUnpaidParticipants = mutation({
   args: {},
   handler: async (ctx) => {
     // Find all sessions that have the old feePerParticipant field set
@@ -78,7 +78,7 @@ export const migrateUnpaidParticipants = internalMutation({
  * Read-only audit — run this BEFORE migrateUnpaidParticipants to see
  * what will be changed.
  */
-export const auditLegacySessions = internalQuery({
+export const auditLegacySessions = query({
   args: {},
   handler: async (ctx) => {
     const allSessions = await ctx.db.query("sessions").collect();

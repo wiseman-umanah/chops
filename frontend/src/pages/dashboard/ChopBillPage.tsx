@@ -93,6 +93,7 @@ function ParticipantRow({
   onUpdate,
   onRemove,
   canRemove,
+  showErrors,
 }: {
   p: Participant
   splitType: SplitType
@@ -100,11 +101,14 @@ function ParticipantRow({
   onUpdate: (patch: Partial<Participant>) => void
   onRemove: () => void
   canRemove: boolean
+  showErrors: boolean
 }) {
+  const nameEmpty = showErrors && !p.name.trim()
   return (
+    <div className="flex flex-col gap-1">
     <div className="flex items-center gap-2">
       <input
-        className={inputCls}
+        className={nameEmpty ? inputErrCls : inputCls}
         placeholder="Name"
         value={p.name}
         onChange={e => onUpdate({ name: e.target.value })}
@@ -151,6 +155,10 @@ function ParticipantRow({
       >
         <RemixIcon name="ri-delete-bin-5-fill" color="#FB2C36" />
       </button>
+    </div>
+    {nameEmpty && (
+      <p className="text-[12px] text-red-500 px-1">Name is required</p>
+    )}
     </div>
   )
 }
@@ -439,6 +447,7 @@ export default function ChopBillPage() {
                   onUpdate={patch => updateParticipant(p.id, patch)}
                   onRemove={() => removeParticipant(p.id)}
                   canRemove={participants.length > 1}
+                  showErrors={submitted}
                 />
               ))}
             </div>
