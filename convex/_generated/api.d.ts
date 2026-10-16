@@ -10,8 +10,10 @@
 
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
+import type * as fees from "../fees.js";
 import type * as http from "../http.js";
 import type * as http_actions from "../http_actions.js";
+import type * as migrations from "../migrations.js";
 import type * as notifications from "../notifications.js";
 import type * as participants from "../participants.js";
 import type * as payments from "../payments.js";
@@ -29,8 +31,10 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   crons: typeof crons;
+  fees: typeof fees;
   http: typeof http;
   http_actions: typeof http_actions;
+  migrations: typeof migrations;
   notifications: typeof notifications;
   participants: typeof participants;
   payments: typeof payments;

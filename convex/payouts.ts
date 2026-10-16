@@ -47,7 +47,7 @@ export const listCompletedChopIn = query({
       (s) => s.mode === "chop-in" && s.status === "closed"
     );
 
-    return Promise.all(
+    const withAmounts = await Promise.all(
       chopInClosed.map(async (session) => {
         const participants = await ctx.db
           .query("participants")
@@ -56,7 +56,6 @@ export const listCompletedChopIn = query({
         const collectedKobo = participants
           .filter((p) => p.status === "sent")
           .reduce((s, p) => s + p.amountOwed, 0);
-        // Only ₦50 flat Bachs withdrawal fee — no platform % at withdrawal (collected at contribution time)
         return {
           ...session,
           collectedKobo,
@@ -66,6 +65,10 @@ export const listCompletedChopIn = query({
         };
       })
     );
+
+    // Only return sessions that have actual funds to withdraw.
+    // An empty chop-in (0 contributions) would produce payoutKobo = -₦50 which is nonsensical.
+    return withAmounts.filter((s) => s.collectedKobo > BACHS_WITHDRAWAL_FEE_KOBO);
   },
 });
 

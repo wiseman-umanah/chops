@@ -868,8 +868,8 @@ const STATS = [
 						</button>
 						)}
 	
-						{/* Withdraw (chop-in completed only) */}
-						{isComplete && session.mode === 'chop-in' && (
+						{/* Withdraw (chop-in completed only, and only if funds were actually collected) */}
+						{isComplete && session.mode === 'chop-in' && session.paidAmount > 0 && (
 						<button
 							onClick={() => navigate('/dashboard/wallet')}
 							className="
