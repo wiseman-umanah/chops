@@ -141,6 +141,7 @@ export const generateReferralCode = mutation({
  *  - code must exist in referralCodes
  *  - referred user must not have been referred before (no double-counting)
  *  - user cannot refer themselves
+ *  - user must be genuinely new (no existing sessions = never created a chop)
  */
 export const recordReferral = mutation({
   args: { code: v.string() },
@@ -158,6 +159,13 @@ export const recordReferral = mutation({
     const referrerId = codeRow.userId;
     if (referrerId === referredId) return; // cannot refer yourself
 
+    // Only count genuinely new users — existing users with sessions are not referrals
+    const hasSession = await ctx.db
+      .query("sessions")
+      .withIndex("by_organizer", (q) => q.eq("organizerId", referredId))
+      .first();
+    if (hasSession) return;
+
     // Idempotency — don't record the same referral twice
     const existing = await ctx.db
       .query("referrals")
@@ -170,6 +178,33 @@ export const recordReferral = mutation({
       referredId,
       code: code.toUpperCase(),
     });
+  },
+});
+
+/**
+ * Internal — auto-generates a referral code for a user immediately after signup.
+ * Idempotent: if the user already has a code, does nothing.
+ */
+export const internalGenerateReferralCode = internalMutation({
+  args: { userId: v.string() },
+  handler: async (ctx, { userId }) => {
+    const existing = await ctx.db
+      .query("referralCodes")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
+    if (existing) return;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = makeCode();
+      const collision = await ctx.db
+        .query("referralCodes")
+        .withIndex("by_code", (q) => q.eq("code", code))
+        .first();
+      if (!collision) {
+        await ctx.db.insert("referralCodes", { userId, code });
+        return;
+      }
+    }
   },
 });
 

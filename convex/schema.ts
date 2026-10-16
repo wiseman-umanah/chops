@@ -92,7 +92,7 @@ export default defineSchema({
   participants: defineTable({
     sessionId: v.id("sessions"),
     name: v.string(),
-    /** Amount this participant owes in kobo (includes their share of the platform fee) */
+    /** Pure share / contribution amount in kobo — no platform fee included */
     amountOwed: v.number(),
     status: v.union(v.literal("pending"), v.literal("sent")),
     /** Chop Food only — line items */
@@ -107,6 +107,10 @@ export default defineSchema({
     paymentRef: v.optional(v.string()),
     /** Optional payer email — used to send a payment confirmation email */
     payerEmail: v.optional(v.string()),
+    /** Platform fee (2%, capped ₦2,000) charged on this participant's contribution — set at checkout initiation */
+    platformFeeKobo: v.optional(v.number()),
+    /** Actual Bachs processing fee from collection.succeeded webhook (data.fees.amount converted to kobo) */
+    bachsFeeKobo: v.optional(v.number()),
   })
     .index("by_session", ["sessionId"])
     .index("by_payment_ref", ["paymentRef"]),

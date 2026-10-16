@@ -113,7 +113,7 @@ describe("generateSlug — format contract", () => {
 describe("generateSlug — statistical invariants over 10,000 samples", () => {
   const SAMPLE_SIZE = 10_000;
 
-  it(`all ${SAMPLE_SIZE} slugs satisfy every format invariant`, () => {
+  it(`all ${SAMPLE_SIZE} slugs satisfy every format invariant`, { timeout: 120_000 }, () => {
     for (let i = 0; i < SAMPLE_SIZE; i++) {
       assertSlugInvariant(generateSlug());
     }

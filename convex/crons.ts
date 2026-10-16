@@ -5,22 +5,41 @@ import { v } from "convex/values";
 
 // ── Internal helpers ───────────────────────────────────────────────────────────
 
-/** Finds pending participant rows older than `cutoff` ms with no paymentRef */
+/**
+ * Finds abandoned chop-in pending participant rows older than `cutoff` ms.
+ *
+ * IMPORTANT: Only chop-in participants are eligible for cleanup.
+ * Food/bill participants are created by the organizer and must never be
+ * auto-deleted — a person who hasn't paid after 24 hours is still expected
+ * to pay via the same link.
+ * Chop-in participants are pre-inserted right before a Bachs redirect, so
+ * a pending row with no paymentRef after 24 hours means the payer abandoned.
+ */
 export const _findAbandonedPending = internalQuery({
   args: { cutoff: v.number() },
   handler: async (ctx, { cutoff }) => {
-    // Collect all pending participants — no index on status, scan is acceptable
-    // for a nightly cron with low frequency
     const all = await ctx.db
       .query("participants")
       .withIndex("by_session")
       .collect();
-    return all.filter(
+
+    // Filter to pending, no paymentRef, older than cutoff
+    const candidates = all.filter(
       (p) =>
         p.status === "pending" &&
         !p.paymentRef &&
         p._creationTime < cutoff
     );
+
+    // Only keep chop-in participants — must look up each session
+    const results = [];
+    for (const p of candidates) {
+      const session = await ctx.db.get(p.sessionId);
+      if (session?.mode === "chop-in") {
+        results.push(p);
+      }
+    }
+    return results;
   },
 });
 

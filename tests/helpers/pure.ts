@@ -387,3 +387,307 @@ export function shouldAutoClose(
   if (allParticipants.length === 0) return false;
   return allParticipants.every((p) => p.status === "sent");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// computeFees  (source: convex/fees.ts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const PLATFORM_FEE_RATE            = 0.02;
+export const PLATFORM_FEE_CAP_KOBO        = 200_000;  // ₦2,000
+export const BACHS_BANK_TRANSFER_RATE     = 0.015;
+export const BACHS_BANK_TRANSFER_CAP_KOBO = 200_000;  // ₦2,000
+export const BACHS_WITHDRAWAL_FEE_KOBO    = 5_000;    // ₦50
+
+export interface FeeBreakdown {
+  amountDueKobo: number;
+  platformFeeKobo: number;
+  checkoutAmountKobo: number;
+  estimatedBachsFeeKobo: number;
+  estimatedTotalKobo: number;
+}
+
+export function computeFees(amountDueKobo: number): FeeBreakdown {
+  const platformFeeKobo = Math.min(
+    Math.round(amountDueKobo * PLATFORM_FEE_RATE),
+    PLATFORM_FEE_CAP_KOBO,
+  );
+  const checkoutAmountKobo = amountDueKobo + platformFeeKobo;
+  const estimatedBachsFeeKobo = Math.min(
+    Math.round(checkoutAmountKobo * BACHS_BANK_TRANSFER_RATE),
+    BACHS_BANK_TRANSFER_CAP_KOBO,
+  );
+  return {
+    amountDueKobo,
+    platformFeeKobo,
+    checkoutAmountKobo,
+    estimatedBachsFeeKobo,
+    estimatedTotalKobo: checkoutAmountKobo + estimatedBachsFeeKobo,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payout computation  (source: convex/payouts.ts :: listCompletedChopIn / requestPayout)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Computes the net payout for a chop-in withdrawal after the ₦50 Bachs fee.
+ * Source of truth for both listCompletedChopIn and requestPayout.
+ */
+export function computeChopInPayoutNew(collectedKobo: number): {
+  bachsTransferFeeKobo: number;
+  feeKobo: number;
+  payoutKobo: number;
+} {
+  const feeKobo = BACHS_WITHDRAWAL_FEE_KOBO;
+  return {
+    bachsTransferFeeKobo: feeKobo,
+    feeKobo,
+    payoutKobo: collectedKobo - feeKobo,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Referral code helpers  (source: convex/referrals.ts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const REFERRAL_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no I, O
+export const REFERRAL_DIGITS  = "0123456789";
+export const REFERRAL_CODE_LENGTH = 6;
+
+/** Mirrors makeCode() from convex/referrals.ts — 4 letters + 2 digits */
+export function makeReferralCode(): string {
+  const pick = (chars: string) => chars[Math.floor(Math.random() * chars.length)];
+  const letters = Array.from({ length: 4 }, () => pick(REFERRAL_LETTERS)).join("");
+  const digits  = Array.from({ length: 2 }, () => pick(REFERRAL_DIGITS)).join("");
+  return letters + digits;
+}
+
+/**
+ * Mirrors the shape-validation done in validateReferralCode:
+ *   - must be exactly 6 chars
+ *   - must match only allowed characters
+ */
+export function isValidReferralCodeFormat(code: string): boolean {
+  if (!code || code.length !== REFERRAL_CODE_LENGTH) return false;
+  const allowed = REFERRAL_LETTERS + REFERRAL_DIGITS;
+  return [...code.toUpperCase()].every((c) => allowed.includes(c));
+}
+
+/**
+ * Mirrors the guard logic from recordReferral (pure business rules only):
+ *   - code must exist (simulated by codeExists flag)
+ *   - referred user must not be the referrer (self-referral guard)
+ *   - referred user must have no existing sessions (genuinely new user)
+ *   - must not already have a referral record (idempotency)
+ */
+export interface ReferralGuardInput {
+  codeExists: boolean;
+  referrerId: string;
+  referredId: string;
+  referredHasSessions: boolean;
+  referralAlreadyRecorded: boolean;
+}
+
+export type ReferralGuardResult =
+  | { allow: true }
+  | { allow: false; reason: "invalid_code" | "self_referral" | "not_new_user" | "duplicate" };
+
+export function checkReferralGuards(input: ReferralGuardInput): ReferralGuardResult {
+  if (!input.codeExists) return { allow: false, reason: "invalid_code" };
+  if (input.referrerId === input.referredId) return { allow: false, reason: "self_referral" };
+  if (input.referredHasSessions) return { allow: false, reason: "not_new_user" };
+  if (input.referralAlreadyRecorded) return { allow: false, reason: "duplicate" };
+  return { allow: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-participant payment progress helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ParticipantPaymentRow {
+  name: string;
+  amountOwed: number;  // pure share, kobo
+  status: "pending" | "sent";
+}
+
+/** Returns total amount collected from "sent" participants */
+export function totalCollected(participants: ParticipantPaymentRow[]): number {
+  return participants
+    .filter((p) => p.status === "sent")
+    .reduce((sum, p) => sum + p.amountOwed, 0);
+}
+
+/** Returns total amount still outstanding from "pending" participants */
+export function totalOutstanding(participants: ParticipantPaymentRow[]): number {
+  return participants
+    .filter((p) => p.status === "pending")
+    .reduce((sum, p) => sum + p.amountOwed, 0);
+}
+
+/** Progress percentage (0–100) for food/bill sessions */
+export function sessionProgressPct(participants: ParticipantPaymentRow[]): number {
+  if (participants.length === 0) return 0;
+  const paid = participants.filter((p) => p.status === "sent").length;
+  return Math.round((paid / participants.length) * 100);
+}
+
+/** Progress percentage (0–100) for chop-in sessions by collected / goal */
+export function chopInProgressPct(collectedKobo: number, goalKobo: number): number {
+  if (goalKobo <= 0) return 0;
+  return Math.min(100, Math.round((collectedKobo / goalKobo) * 100));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stale / abandoned payment helpers
+// (source: convex/crons.ts :: cleanupAbandonedParticipants)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PendingParticipantRow {
+  _id: string;
+  status: "pending" | "sent";
+  paymentRef?: string;
+  _creationTime: number;   // ms since epoch
+}
+
+/** Mirrors the cron filter: pending, no paymentRef, older than cutoff */
+export function isAbandonedParticipant(
+  row: PendingParticipantRow,
+  cutoffMs: number,
+): boolean {
+  return (
+    row.status === "pending" &&
+    !row.paymentRef &&
+    row._creationTime < cutoffMs
+  );
+}
+
+/** Returns the 24-hour cutoff timestamp in ms for abandoned participant cleanup */
+export function abandonedCutoff(nowMs: number): number {
+  return nowMs - 24 * 60 * 60 * 1000;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Latency budget contracts (pure timing helpers — no real I/O)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LatencyBudget {
+  /** Maximum acceptable round-trip in milliseconds */
+  maxMs: number;
+  /** Descriptive label for error messages */
+  label: string;
+}
+
+export const LATENCY_BUDGETS: Record<string, LatencyBudget> = {
+  /** Fee computation must be instantaneous — it's pure math */
+  FEE_COMPUTATION:    { maxMs: 1,    label: "computeFees() — pure math" },
+  /** Slug generation must be fast — called on every session create */
+  SLUG_GENERATION:    { maxMs: 1,    label: "generateSlug() — pure random" },
+  /** Referral code generation — pure random, 4+2 chars */
+  REFERRAL_CODE_GEN:  { maxMs: 1,    label: "makeReferralCode() — pure random" },
+  /** Webhook HMAC verification (uses Web Crypto — async but local) */
+  WEBHOOK_HMAC:       { maxMs: 50,   label: "computeHmacSha256() — Web Crypto" },
+  /** Payment success poll timeout — 90s in production; we verify the contract */
+  PAYMENT_POLL_TIMEOUT: { maxMs: 90_000, label: "PaymentSuccessPage poll timeout" },
+  /** Abandoned participant cutoff: 24h in ms */
+  CLEANUP_CUTOFF_MS:  { maxMs: 86_400_000, label: "abandonedCutoff() — 24h cleanup" },
+};
+
+/** Returns true if actualMs is within the given budget */
+export function withinLatencyBudget(actualMs: number, budget: LatencyBudget): boolean {
+  return actualMs <= budget.maxMs;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Double-charge detection helper
+// Guards against the fee overhaul migration risk:
+//   Old sessions: amountOwed already included feePerParticipant baked in.
+//   New sessions: amountOwed is pure share; fee added at checkout via computeFees.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LegacyParticipantRow {
+  amountOwed: number;
+  platformFeeKobo?: number;  // set by new initiateCheckout; absent on legacy rows
+}
+
+export interface LegacySessionRow {
+  feePerParticipant?: number;  // set by old createSession; absent on new sessions
+}
+
+/**
+ * Returns true if this participant would be double-charged if the new 2%
+ * checkout fee were applied naively.
+ *
+ * Rule: a legacy participant whose session has feePerParticipant set AND
+ * whose platformFeeKobo has not been patched yet is at risk.
+ * The migration (migrateUnpaidParticipants) strips feePerParticipant from
+ * amountOwed before the new initiateCheckout deploys.
+ */
+export function isDoubleChargeRisk(
+  participant: LegacyParticipantRow,
+  session: LegacySessionRow,
+): boolean {
+  return (
+    session.feePerParticipant != null &&
+    session.feePerParticipant > 0 &&
+    participant.platformFeeKobo == null
+  );
+}
+
+/**
+ * Simulates migrateUnpaidParticipants for a single participant:
+ * strips the old baked-in feePerParticipant from amountOwed.
+ * Returns the clean amountOwed or throws if it would go negative.
+ */
+export function migrateParticipantAmountOwed(
+  participant: LegacyParticipantRow,
+  feePerParticipant: number,
+): number {
+  const clean = participant.amountOwed - feePerParticipant;
+  if (clean < 0) {
+    throw new Error(
+      `Migration would produce negative amountOwed: ${participant.amountOwed} - ${feePerParticipant} = ${clean}`,
+    );
+  }
+  return clean;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Checkout intent builder — mirrors initiateCheckout's pre-Bachs-call logic
+// (source: convex/payments.ts :: initiateCheckout)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CheckoutIntent {
+  amountDueKobo: number;
+  fees: FeeBreakdown;
+  /** The NGN decimal string sent to Bachs as pricing.amount */
+  bachsAmountStr: string;
+  /** customer_bears_fee always true */
+  customerBearsFee: true;
+}
+
+/**
+ * Builds the checkout intent for a food/bill participant.
+ * Mirrors the relevant pure portion of initiateCheckout.
+ */
+export function buildFoodBillCheckoutIntent(amountOwedKobo: number): CheckoutIntent {
+  const fees = computeFees(amountOwedKobo);
+  return {
+    amountDueKobo: amountOwedKobo,
+    fees,
+    bachsAmountStr: (fees.checkoutAmountKobo / 100).toFixed(2),
+    customerBearsFee: true,
+  };
+}
+
+/**
+ * Builds the checkout intent for a chop-in contribution.
+ */
+export function buildChopInCheckoutIntent(contributionKobo: number): CheckoutIntent {
+  const fees = computeFees(contributionKobo);
+  return {
+    amountDueKobo: contributionKobo,
+    fees,
+    bachsAmountStr: (fees.checkoutAmountKobo / 100).toFixed(2),
+    customerBearsFee: true,
+  };
+}

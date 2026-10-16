@@ -116,11 +116,17 @@ export const bachsWebhook = httpAction(async (_ctx, request) => {
       reference: string | null;
       status: string;
       metadata: { participantId?: string; sessionId?: string };
+      fees?: { amount?: string };
     };
 
-    const { reference, charge_id, checkout_id, metadata } = data;
+    const { reference, charge_id, checkout_id, metadata, fees } = data;
     const { participantId } = metadata ?? {};
     const paymentRef = reference ?? charge_id ?? checkout_id ?? payload.id;
+
+    // Convert Bachs fee (NGN decimal string) to kobo — stored for reconciliation
+    const bachsFeeKobo = fees?.amount
+      ? Math.round(parseFloat(fees.amount) * 100)
+      : undefined;
 
     if (!participantId) {
       console.error("Bachs webhook: missing participantId in metadata", { eventId: payload.id });
@@ -131,6 +137,7 @@ export const bachsWebhook = httpAction(async (_ctx, request) => {
       await _ctx.runMutation(internal.participants.updateParticipantStatus, {
         participantId: participantId as never,
         paymentRef,
+        bachsFeeKobo,
       });
     } catch (err) {
       console.error("Bachs webhook: failed to update participant", err);
@@ -248,6 +255,39 @@ export const bachsWebhook = httpAction(async (_ctx, request) => {
     } catch (err) {
       console.error("Bachs payout.failed: handler error", err);
       return new Response("Internal error", { status: 500 });
+    }
+
+    return new Response("OK", { status: 200 });
+  }
+
+  // ── checkout.expired / checkout.failed ───────────────────────────────────
+  // Bachs fires these when a checkout session times out or the payment fails.
+  // For chop-in sessions we pre-insert a pending participant row before the
+  // redirect — if the payer abandons, that row must be cleaned up immediately
+  // rather than waiting for the nightly cron.
+  // Food/bill participants already exist and are NOT deleted on expiry (the
+  // organizer set them up; they can try paying again via the same link).
+
+  if (payload.type === "checkout.expired" || payload.type === "checkout.failed") {
+    const data = payload.data as {
+      checkout_id?: string;
+      metadata?: { participantId?: string; sessionId?: string };
+    };
+
+    const { participantId } = data.metadata ?? {};
+
+    if (!participantId) {
+      // No metadata — nothing we can do, acknowledge silently
+      return new Response("OK", { status: 200 });
+    }
+
+    try {
+      await _ctx.runMutation(internal.participants.deleteAbandonedChopInParticipant, {
+        participantId: participantId as never,
+      });
+    } catch (err) {
+      // Non-fatal — log and acknowledge so Bachs doesn't retry indefinitely
+      console.warn(`Bachs ${payload.type}: cleanup failed for participant ${participantId}:`, err);
     }
 
     return new Response("OK", { status: 200 });

@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
+import { computeFees } from '@/lib/fees'
 
 const BRAND = '#FF6900'
 
@@ -47,17 +48,6 @@ const inputErrCls =
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null
   return <p className="text-[12px] text-red-500 mt-1.5 px-1">{msg}</p>
-}
-
-function computeFeePerParticipant(totalKobo: number, n: number): number {
-  if (n === 0) return 0
-  let totalFee: number
-  if (totalKobo < 500_000)        totalFee = 10_000
-  else if (totalKobo < 1_000_000) totalFee = 15_000
-  else if (totalKobo < 2_000_000) totalFee = 20_000
-  else if (totalKobo < 5_000_000) totalFee = Math.round(totalKobo * 0.0075)
-  else                             totalFee = Math.round(totalKobo * 0.005)
-  return Math.round(totalFee / n)
 }
 
 function ParticipantSelect({
@@ -189,7 +179,6 @@ export default function ChopFoodPage() {
   const tip           = Math.round(subtotal * (parseFloat(tipPct) || 0) / 100)
   const total         = subtotal + tax + tip
   const totalKobo     = total * 100
-  const feePerParticipantKobo = computeFeePerParticipant(totalKobo, namedPeople.length)
 
   // Derived field errors — only visible after first submit attempt
   const hasMenuItems = items.some(it => it.name.trim())
@@ -215,10 +204,10 @@ export default function ChopFoodPage() {
     return Object.fromEntries(
       Object.entries(totals).map(([p, v]) => [
         p,
-        Math.round(v * (1 + taxTipFactor)) + Math.round(feePerParticipantKobo / 100),
+        Math.round(v * (1 + taxTipFactor)),
       ])
     )
-  }, [items, namedPeople, tax, tip, subtotal, feePerParticipantKobo])
+  }, [items, namedPeople, tax, tip, subtotal])
 
   function addItem() {
     setItems(prev => [...prev, { id: uid(), name: '', qty: 1, price: 0, participant: 'Everyone' }])
@@ -554,12 +543,17 @@ export default function ChopFoodPage() {
                 <span>Total bill</span>
                 <span>{formatNaira(total)}</span>
               </div>
-              {namedPeople.length > 0 && totalKobo > 0 && (
-                <div className="flex justify-between text-white/70 text-[13px]">
-                  <span>+ Platform fee (split across participants)</span>
-                  <span>+{formatNaira(Math.round(feePerParticipantKobo / 100))}</span>
-                </div>
-              )}
+              {namedPeople.length > 0 && totalKobo > 0 && (() => {
+                // Show estimated platform fee per person (2% of their share, capped ₦2,000)
+                const sampleShare = Math.round(totalKobo / namedPeople.length)
+                const sampleFee = computeFees(sampleShare).platformFeeKobo
+                return (
+                  <div className="flex justify-between text-white/70 text-[13px]">
+                    <span>+ Service fee per person (est. 2%)</span>
+                    <span>+{formatNaira(sampleFee)}</span>
+                  </div>
+                )
+              })()}
             </div>
 
             <button

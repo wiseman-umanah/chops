@@ -10,6 +10,7 @@ export const getMyProfile = query({
     if (!userId) return null;
     const user = await ctx.db.get(userId);
     if (!user) return null;
+
     // Resolve storageId → public URL if image is a Convex storage ID
     let imageUrl: string | null = null;
     if (user.image) {
@@ -21,7 +22,20 @@ export const getMyProfile = query({
         imageUrl = await ctx.storage.getUrl(user.image as string) ?? null;
       }
     }
-    return { ...user, imageUrl };
+
+    // Google OAuth only sets `name` (full name), not firstName/lastName.
+    // Derive them so the Settings form is pre-filled correctly.
+    // A password signup always sets firstName explicitly, so this only kicks in
+    // when firstName is genuinely absent.
+    let firstName = user.firstName;
+    let lastName  = user.lastName;
+    if (!firstName && user.name) {
+      const parts = user.name.trim().split(/\s+/);
+      firstName = parts[0];
+      lastName  = parts.slice(1).join(" ") || undefined;
+    }
+
+    return { ...user, firstName, lastName, imageUrl };
   },
 });
 
