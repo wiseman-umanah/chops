@@ -1,0 +1,5 @@
+# www → apex redirect (301 permanent)
+https://www.usechop.xyz/* https://usechop.xyz/:splat 301
+
+# SPA fallback — all routes serve index.html (React Router handles them client-side)
+/*    /index.html   200

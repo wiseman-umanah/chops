@@ -1,8 +1,8 @@
 import { motion } from 'framer-motion'
 import { Seo } from '@/hooks/useSeo'
 
-const LAST_UPDATED = 'June 2025'
-const SUPPORT_EMAIL = 'support@chop.pxxl.click'
+const LAST_UPDATED = 'October 2026'
+const SUPPORT_EMAIL = 'support@usechop.xyz'
 
 const SECTIONS = [
   {

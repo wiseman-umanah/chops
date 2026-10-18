@@ -1,7 +1,7 @@
 import { Helmet } from 'react-helmet-async'
 
 const SITE_NAME   = 'Chop'
-const SITE_URL    = 'https://chop.pxxl.click'
+const SITE_URL    = 'https://usechop.xyz'
 const DEFAULT_IMG = `${SITE_URL}/og-image.webp`
 const DEFAULT_DESCRIPTION =
   'No app download. No awkward money talk. Create a Chop session, share the link on WhatsApp, and let everyone settle their share directly.'

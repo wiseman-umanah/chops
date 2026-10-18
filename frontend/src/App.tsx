@@ -17,6 +17,7 @@ import PublicLayout from './layouts/PublicLayout'
 const LandingPage          = lazy(() => import('./pages/LandingPage'))
 const TermsPage            = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage          = lazy(() => import('./pages/PrivacyPage'))
+const NotFoundPage         = lazy(() => import('./pages/NotFoundPage'))
 
 const AuthPage             = lazy(() => import('./pages/auth/AuthPage'))
 const ForgotPasswordPage   = lazy(() => import('./pages/auth/ForgotPasswordPage'))
@@ -111,7 +112,12 @@ export default function App() {
         <Route path="/r/:paymentRef" element={<Suspense fallback={<PageFallback />}><ReceiptPage /></Suspense>} />
 
         {/* Landing + public pages */}
-        <Route path="/*" element={<LandingShell />} />
+        <Route path="/" element={<LandingShell />} />
+        <Route path="/terms" element={<LandingShell />} />
+        <Route path="/privacy" element={<LandingShell />} />
+
+        {/* 404 — must be last */}
+        <Route path="*" element={<Suspense fallback={<PageFallback />}><NotFoundPage /></Suspense>} />
       </Routes>
     </AuthProvider>
   )

@@ -200,7 +200,7 @@ export default function ShareLinkPage() {
                       {shareUrl}
                     </p>
                     <p className="text-[10px] text-neutral-400 mt-0.5 uppercase tracking-wide">
-                      chop.pxxl.click
+                      usechop.xyz
                     </p>
                   </div>
                 </div>

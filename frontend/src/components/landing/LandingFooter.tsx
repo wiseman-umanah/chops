@@ -98,12 +98,12 @@ export default function LandingFooter() {
                 </Link>
               )
             })}
-            <a href="mailto:support@usechop.co" className="text-[14px] transition-colors hover:text-white">Support</a>
+            <a href="mailto:support@usechop.xyz" className="text-[14px] transition-colors hover:text-white">Support</a>
           </nav>
 
           {/* Copyright */}
           <p className="text-[13px] font-semibold">
-            © {new Date().getFullYear()} CHOP. Powered by Macedon Labs
+            © {new Date().getFullYear()} Chop
           </p>
 
         </div>

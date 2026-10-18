@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+# Block authenticated/private routes from indexing
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /payment-success
+Disallow: /r/
+
+# Allow session pay pages (public, crawlable for WhatsApp preview)
+Allow: /s/
+
+Sitemap: https://usechop.xyz/sitemap.xml

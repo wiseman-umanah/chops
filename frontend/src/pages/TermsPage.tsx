@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import { Seo } from '@/hooks/useSeo'
 
 const LAST_UPDATED = 'October 2026'
-const SUPPORT_EMAIL = 'support@chop.pxxl.click'
+const SUPPORT_EMAIL = 'support@usechop.xyz'
 
 const SECTIONS = [
   {
@@ -31,11 +31,11 @@ const SECTIONS = [
   },
   {
     title: '7. Intellectual Property',
-    body: 'All content, branding, and software on Chop are the property of Macedon Labs. You may not reproduce or distribute any part of the Service without written permission.',
+    body: 'All content, branding, and software on Chop are the property of Chop. You may not reproduce or distribute any part of the Service without written permission.',
   },
   {
     title: '8. Limitation of Liability',
-    body: 'To the extent permitted by law, Macedon Labs is not liable for any indirect, incidental, or consequential damages arising from your use of the Service.',
+    body: 'To the extent permitted by law, Chop is not liable for any indirect, incidental, or consequential damages arising from your use of the Service.',
   },
   {
     title: '9. Changes to Terms',

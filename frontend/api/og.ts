@@ -8,7 +8,7 @@ const CONVEX_URL =
   process.env.VITE_CONVEX_URL ??
   'https://amicable-roadrunner-898.convex.cloud'
 
-const SITE_URL = process.env.SITE_URL ?? 'https://chop.pxxl.click'
+const SITE_URL = process.env.SITE_URL ?? 'https://usechop.xyz'
 
 const CRAWLER_RE =
   /WhatsApp|facebookexternalhit|Twitterbot|Slackbot|TelegramBot|LinkedInBot|Discordbot|Pinterest|Googlebot|bingbot|curl|Wget|python-requests/i
