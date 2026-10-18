@@ -37,7 +37,7 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#FF6900" />
 
-    <!-- Structured Data (JSON-LD) -->
+    <!-- Structured Data (JSON-LD) — WebApplication -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -66,6 +66,48 @@
         "@type": "ViewAction",
         "target": "https://usechop.xyz/signup"
       }
+    }
+    </script>
+
+    <!-- Structured Data (JSON-LD) — FAQPage -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Do my friends need to install an app or create an account?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Participants only need the shared link. They open it in any mobile or desktop browser, pick their share, and pay — no app download, no sign-up required."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I share my Chop session on WhatsApp?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "After creating a session, tap \"Copy link\" and paste it into any WhatsApp chat or group. The link generates a rich preview card so your group sees the session name and total at a glance."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How fast are payments processed and confirmed?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Payments are confirmed in real-time. The moment a participant pays, their status flips from red to green instantly — no page refresh needed."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Are there fees for creating or paying a session?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Creating a Chop session is free. A small processing fee may apply on individual payments depending on the payment method used."
+          }
+        }
+      ]
     }
     </script>
   </head>

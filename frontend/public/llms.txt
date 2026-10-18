@@ -1,0 +1,33 @@
+# Chop
+
+> Chop is a Nigerian group payment app for splitting bills, pooling funds, and collecting for group orders — entirely via a shareable web link. No app download required for participants.
+
+## What Chop does
+
+Chop lets one person (the organiser) create a payment session and share a single link on WhatsApp or any group chat. Everyone in the group opens the link in their browser and pays their share instantly — no sign-up, no app install needed on their end.
+
+## Session modes
+
+- **Chop Food**: Group meal orders where each participant selects exactly what they ate and pays their individual dish breakdown. Best for office lunches, suya nights, birthday dinners.
+- **Chop In**: Group fund pooling toward a shared goal or contribution. Each person chips in whatever amount they choose. Best for birthday gifts, trips, owambe contributions, and party funds.
+- **Chop Bill**: Automated expense splitting for shared costs. Split equally or by custom percentage. Best for rent, electricity bills, and shared ride costs.
+
+## Key facts
+
+- Built for Nigeria; payments processed in Naira (NGN)
+- Participants need only a web browser — no account, no download
+- Payment links generate rich WhatsApp preview cards automatically
+- Real-time payment status: organisers see who has paid (green) and who still owes (red) instantly
+- Creating a session is free; a small processing fee applies per payment
+- Web app only — available at https://usechop.xyz
+
+## Who it is for
+
+Groups of friends, colleagues, or family members who need to collect or split money without the friction of bank transfers, follow-ups, or awkward reminders. Especially useful for Nigerian group chats on WhatsApp.
+
+## Links
+
+- Homepage: https://usechop.xyz
+- Sign up: https://usechop.xyz/signup
+- Terms of Service: https://usechop.xyz/terms
+- Privacy Policy: https://usechop.xyz/privacy
