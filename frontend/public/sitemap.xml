@@ -5,6 +5,7 @@
   <!-- Home / Landing -->
   <url>
     <loc>https://usechop.xyz/</loc>
+    <lastmod>2025-07-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -12,11 +13,13 @@
   <!-- Public information pages -->
   <url>
     <loc>https://usechop.xyz/terms</loc>
+    <lastmod>2025-07-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
     <loc>https://usechop.xyz/privacy</loc>
+    <lastmod>2025-07-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
