@@ -34,8 +34,9 @@ export default function LandingFooter() {
               <span className="text-[16px] leading-none">›</span>
             </Link>
 
-            {/* Chat bubble — top right (hidden on small, visible sm+) */}
+            {/* Chat bubble — top right (decorative, hidden from screen readers) */}
             <div
+              aria-hidden="true"
               className="hidden sm:block absolute"
               style={{
                 top: 20, right: -24,
@@ -49,8 +50,9 @@ export default function LandingFooter() {
               <p className='absolute right-2 bottom-0' style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, margin: '2px 0 0 0', textAlign: 'right' }}>08:00 PM</p>
             </div>
 
-            {/* Chat bubble — bottom left (hidden on small, visible sm+) */}
+            {/* Chat bubble — bottom left (decorative, hidden from screen readers) */}
             <div
+              aria-hidden="true"
               className="hidden sm:flex absolute items-center"
               style={{
                 bottom: 20, left: -24,

@@ -115,20 +115,22 @@ export default function ShareLinkPage() {
 			</div>
             <button
               onClick={handleCopy}
+              aria-label={copied ? 'Link copied' : 'Copy session link'}
               className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] text-white transition-opacity hover:opacity-90"
               style={{ background: copied ? '#16a34a' : '#FF6900' }}
             >
-              <RemixIcon name={copied ? 'ri-check-line' : 'ri-checkbox-multiple-blank-fill'} />
+              <RemixIcon name={copied ? 'ri-check-line' : 'ri-checkbox-multiple-blank-fill'} aria-hidden="true" />
               {copied ? 'Copied!' : 'Copy Link'}
             </button>
           </div>
 
           {/* Optional personal note */}
           <div className="mb-3">
-            <label className="block text-[12px] font-semibold text-neutral-500 mb-1.5">
+            <label htmlFor="custom-note" className="block text-[12px] font-semibold text-neutral-500 mb-1.5">
               Add a personal note <span className="font-normal text-neutral-400">(optional)</span>
             </label>
             <textarea
+              id="custom-note"
               value={customNote}
               onChange={e => setCustomNote(e.target.value)}
               placeholder={`e.g. "Guys, please pay before Friday 🙏"`}

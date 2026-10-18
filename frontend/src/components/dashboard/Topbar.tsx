@@ -5,6 +5,7 @@ import { useQuery } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import RemixIcon from '@/components/RemixIcon'
 import Logo from '@/components/Logo'
+import { useTour } from '@/contexts/TourContext'
 
 export default function Topbar() {
   const navigate = useNavigate()
@@ -28,7 +29,7 @@ export default function Topbar() {
         <div className="flex max-w-[90%] mx-auto items-center justify-between sm:border sm:border-neutral-200 sm:rounded-full bg-white px-2 sm:px-5 py-3">
 
           {/* Left: logo */}
-          <Link to="/dashboard" className="flex items-center gap-2">
+          <Link to="/dashboard" data-tour="topbar-logo" className="flex items-center gap-2">
             <Logo width={32} height={32} />
             <span style={{ fontSize: 20, letterSpacing: '2px', fontFamily: 'Godber, sans-serif', color: '#18181b' }}>
               Chop
@@ -41,6 +42,7 @@ export default function Topbar() {
             <div className="hidden sm:flex items-center gap-1 border border-[#FF6900] rounded-full px-6 py-3">
               <button
                 aria-label="Notifications"
+                data-tour="topbar-notifications"
                 onClick={() => navigate('/dashboard/notifications')}
                 className="relative text-[#B2B2B2] hover:text-[#FF6900] transition-colors"
               >
@@ -54,9 +56,10 @@ export default function Topbar() {
                   </span>
                 )}
               </button>
-              <span className="w-px h-4 bg-neutral-200 mx-1" />
+              <span className="w-px h-4 bg-neutral-200 mx-1" aria-hidden="true" />
               <button
                 aria-label="Wallet"
+                data-tour="topbar-wallet"
                 onClick={() => navigate('/dashboard/wallet')}
                 className="text-[#B2B2B2] hover:text-[#FF6900] transition-colors"
               >
@@ -268,6 +271,7 @@ function MobileSidebar({ open, onClose, unreadCount }: MobileSidebarProps) {
 function ProfileDropdown() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { startTour } = useTour()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -297,6 +301,7 @@ function ProfileDropdown() {
       {/* Avatar button */}
       <button
         id="profile-menu-trigger"
+        data-tour="topbar-profile"
         onClick={() => setOpen(v => !v)}
         aria-label="Open profile menu"
         aria-expanded={open}
@@ -356,6 +361,13 @@ function ProfileDropdown() {
             >
               <RemixIcon name="ri-settings-3-line" size={16} color="#6b7280" />
               Settings
+            </button>
+            <button
+              onClick={() => { setOpen(false); startTour() }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+            >
+              <RemixIcon name="ri-route-line" size={16} color="#6b7280" />
+              Take the tour
             </button>
             <button
               id="sign-out-btn"

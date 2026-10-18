@@ -538,7 +538,7 @@ const STATS = [
           Join Session
         </button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div data-tour="quick-actions" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {QUICK_ACTIONS.map((action, i) => (
           <motion.button
             key={action.label}
@@ -561,15 +561,17 @@ const STATS = [
       </div>
 
       {/* ── Your Chops ─────────────────────────────────────────────────────── */}
-      <div className="mb-12">
+      <div data-tour="sessions-list" className="mb-12">
         <div className="flex flex-col sm:flex-row items-left sm:items-center justify-between my-10">
           <h2 className="text-[18px] font-bold text-neutral-900 mb-4">Your Chops</h2>
 
           {/* Filter tabs */}
-          <div className="flex gap-1 bg-neutral-100 rounded-full p-1">
+          <div role="tablist" aria-label="Filter sessions" className="flex gap-1 bg-neutral-100 rounded-full p-1">
             {(['all', 'active', 'closed', 'inactive'] as StatusFilter[]).map(f => (
               <button
                 key={f}
+                role="tab"
+                aria-selected={filter === f}
                 onClick={() => setFilter(f)}
                 className="px-4 py-1.5 rounded-full text-[12px] font-semibold capitalize transition-colors"
                 style={
@@ -585,13 +587,13 @@ const STATS = [
         </div>
 
         {deleteError && (
-          <div className="mb-4 rounded-2xl px-5 py-3 text-[13px] font-medium" style={{ background: '#fff1f2', color: '#be123c' }}>
+          <div role="alert" className="mb-4 rounded-2xl px-5 py-3 text-[13px] font-medium" style={{ background: '#fff1f2', color: '#be123c' }}>
             {deleteError}
           </div>
         )}
 
         {closeError && (
-          <div className="mb-4 rounded-2xl px-5 py-3 text-[13px] font-medium" style={{ background: '#fff1f2', color: '#be123c' }}>
+          <div role="alert" className="mb-4 rounded-2xl px-5 py-3 text-[13px] font-medium" style={{ background: '#fff1f2', color: '#be123c' }}>
             {closeError}
           </div>
         )}

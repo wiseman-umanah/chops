@@ -47,10 +47,17 @@ function ParticipantDropdown({
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
+  const listboxId = 'participant-listbox'
+
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        aria-label="Select your name"
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between border border-neutral-200 rounded-full px-4 py-2.5 text-[14px] bg-white text-neutral-800 hover:border-neutral-300 transition-colors"
       >
@@ -59,24 +66,31 @@ function ParticipantDropdown({
           name="ri-arrow-down-s-line"
           size={16}
           color="#9ca3af"
+          aria-hidden="true"
           style={{ transform: open ? 'rotate(180deg)' : 'rotate(0)' }}
         />
       </button>
       {open && (
-        <div className="absolute z-40 mt-1 w-full bg-white border border-neutral-100 rounded-2xl shadow-lg overflow-hidden py-1">
+        <ul
+          id={listboxId}
+          role="listbox"
+          aria-label="Participants"
+          className="absolute z-40 mt-1 w-full bg-white border border-neutral-100 rounded-2xl shadow-lg overflow-hidden py-1 list-none p-0 m-0"
+        >
           {options.map(opt => (
-            <button
+            <li
               key={opt}
-              type="button"
+              role="option"
+              aria-selected={opt === value}
               onClick={() => { onChange(opt); setOpen(false) }}
-              className="w-full flex items-center justify-between px-4 py-2.5 text-[13px] hover:bg-neutral-50 transition-colors"
+              className="w-full flex items-center justify-between px-4 py-2.5 text-[13px] hover:bg-neutral-50 transition-colors cursor-pointer"
               style={{ color: opt === value ? BRAND : '#374151', fontWeight: opt === value ? 600 : 400 }}
             >
               {opt}
-              {opt === value && <RemixIcon name="ri-check-line" size={14} color={BRAND} />}
-            </button>
+              {opt === value && <RemixIcon name="ri-check-line" size={14} color={BRAND} aria-hidden="true" />}
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   )

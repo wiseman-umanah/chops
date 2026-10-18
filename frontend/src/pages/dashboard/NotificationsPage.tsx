@@ -29,9 +29,9 @@ const TYPE_ICON: Record<string, { icon: string; bg: string; color: string }> = {
 
 function Skeleton() {
   return (
-    <div className="flex flex-col gap-3 animate-pulse">
+    <div className="flex flex-col gap-3 animate-pulse" role="status" aria-label="Loading notifications">
       {[...Array(4)].map((_, i) => (
-        <div key={i} className="h-16 rounded-2xl bg-neutral-100" />
+        <div key={i} className="h-16 rounded-2xl bg-neutral-100" aria-hidden="true" />
       ))}
     </div>
   )
@@ -94,10 +94,12 @@ export default function NotificationsPage() {
       </div>
 
       {/* ── Filter tabs ─────────────────────────────────────────────────────── */}
-      <div className="flex gap-2 mb-5">
+      <div role="tablist" aria-label="Notification filter" className="flex gap-2 mb-5">
         {(['all', 'unread'] as const).map(tab => (
           <button
             key={tab}
+            role="tab"
+            aria-selected={filter === tab}
             onClick={() => setFilter(tab)}
             className="px-4 py-1.5 rounded-full text-[13px] font-semibold capitalize transition-colors"
             style={
@@ -108,8 +110,11 @@ export default function NotificationsPage() {
           >
             {tab}
             {tab === 'unread' && unreadCount > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 text-[10px] rounded-full"
-                style={{ background: filter === 'unread' ? 'rgba(255,255,255,0.3)' : BRAND, color: filter === 'unread' ? '#fff' : '#fff' }}>
+              <span
+                className="ml-1.5 inline-flex items-center justify-center w-4 h-4 text-[10px] rounded-full"
+                aria-label={`${unreadCount} unread`}
+                style={{ background: filter === 'unread' ? 'rgba(255,255,255,0.3)' : BRAND, color: '#fff' }}
+              >
                 {unreadCount}
               </span>
             )}
@@ -139,18 +144,20 @@ export default function NotificationsPage() {
         </motion.div>
       ) : (
         <AnimatePresence initial={false}>
-          <div className="flex flex-col gap-2">
+          <div role="list" className="flex flex-col gap-2" aria-label="Notifications">
             {displayed.map(notif => {
               const meta = TYPE_ICON[notif.type] ?? TYPE_ICON.payment
               return (
                 <motion.button
                   key={notif._id}
+                  role="listitem"
                   layout
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.18, ease: 'easeOut' }}
                   onClick={() => handleClick(notif._id, notif.read)}
+                  aria-label={`${notif.title}${notif.read ? '' : ', unread'}`}
                   className="w-full flex items-start gap-3 p-4 rounded-2xl border text-left transition-colors"
                   style={{
                     borderColor: notif.read ? '#f4f4f5' : '#fed7aa',
@@ -180,10 +187,13 @@ export default function NotificationsPage() {
                     </p>
                   </div>
 
-                  {/* Unread dot */}
+                  {/* Unread dot — decorative, label already on button */}
                   {!notif.read && (
-                    <div className="w-2 h-2 rounded-full shrink-0 mt-2"
-                      style={{ background: BRAND }} />
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0 mt-2"
+                      aria-hidden="true"
+                      style={{ background: BRAND }}
+                    />
                   )}
                 </motion.button>
               )
