@@ -21,16 +21,4 @@
     <priority>0.4</priority>
   </url>
 
-  <!-- Auth entry points (indexable so Google shows "Sign up" sitelinks) -->
-  <url>
-    <loc>https://usechop.xyz/signup</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://usechop.xyz/login</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
-
 </urlset>
