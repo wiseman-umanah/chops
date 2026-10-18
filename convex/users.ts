@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import type { Id } from "./_generated/dataModel";
 
 /** Returns the current user's profile including image URL. */
 export const getMyProfile = query({
@@ -68,5 +69,13 @@ export const updateProfile = mutation({
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(userId, patch);
     }
+  },
+});
+
+/** Internal — fetch a user row by ID. Used by webhook handlers to get organizer email. */
+export const getById = internalQuery({
+  args: { userId: v.string() },
+  handler: async (ctx, { userId }) => {
+    return ctx.db.get(userId as Id<"users">);
   },
 });

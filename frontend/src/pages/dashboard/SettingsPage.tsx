@@ -450,7 +450,10 @@ export default function SettingsPage() {
           </form>
         </motion.div>
 
-        {/* ── Section 3: Referral ── */}
+        {/* ── Section 3: Link password (Google-only accounts) ── */}
+        <LinkPasswordSection />
+
+        {/* ── Section 4: Referral ── */}
         <ReferralSection />
 
         {/* ── Section 4: Change password ── */}
@@ -723,3 +726,126 @@ function ReferralSection() {
     </>
   )
 }
+
+// ── Link password section (for Google-only accounts) ─────────────────────────
+
+function LinkPasswordSection() {
+  const { signIn }  = useAuthActions()
+  const profile     = useQuery(api.users.getMyProfile)
+
+  const [open,      setOpen]      = useState(false)
+  const [password,  setPassword]  = useState('')
+  const [showPw,    setShowPw]    = useState(false)
+  const [loading,   setLoading]   = useState(false)
+  const [error,     setError]     = useState('')
+  const [done,      setDone]      = useState(false)
+
+  const pwOk = PW_RULES.every(r => r.test(password))
+
+  // Only show for Google-only accounts — detected by absence of firstName
+  // (Google OAuth sets `name` but not `firstName`; password signup always sets firstName)
+  if (profile === undefined) return null
+  if (profile?.firstName) return null   // already a password account
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!pwOk || !profile?.email) return
+    setError('')
+    setLoading(true)
+    try {
+      await signIn('password', {
+        email: profile.email,
+        password,
+        flow: 'signUp',
+      })
+      setDone(true)
+      setOpen(false)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      setError(msg.includes('already exists')
+        ? 'A password is already set on this account.'
+        : msg || 'Could not link password. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, delay: 0.15 }}
+      className="border border-neutral-200 rounded-2xl p-6 mb-5"
+    >
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-[16px] font-bold text-neutral-900">Set a password</h2>
+        {done && (
+          <span className="text-[12px] text-green-600 flex items-center gap-1">
+            <RemixIcon name="ri-checkbox-circle-fill" size={13} color="#16a34a" /> Password set
+          </span>
+        )}
+      </div>
+      <p className="text-[13px] text-neutral-400 mb-4">
+        Your account uses Google sign-in. Set a password to also log in with your email and password.
+      </p>
+
+      {!open ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="px-5 py-2.5 rounded-full border text-[13px] font-semibold transition-opacity hover:opacity-80"
+          style={{ borderColor: BRAND, color: BRAND }}
+        >
+          Set a password
+        </button>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-3">
+          <div className="relative">
+            <input
+              type={showPw ? 'text' : 'password'}
+              placeholder="New password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              autoFocus
+              className="w-full rounded-full border border-neutral-200 bg-white px-4 py-3 text-[14px] outline-none focus:border-[#FF6900] transition-colors pr-12"
+            />
+            <button type="button" onClick={() => setShowPw(v => !v)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400">
+              <i className={`ri-${showPw ? 'eye-off' : 'eye'}-line text-[18px]`} />
+            </button>
+          </div>
+          {password && (
+            <ul className="flex flex-col gap-1">
+              {PW_RULES.map(rule => (
+                <li key={rule.key} className="flex items-center gap-1.5 text-[12px]"
+                  style={{ color: rule.test(password) ? '#16a34a' : '#9ca3af' }}>
+                  <span className="text-[11px]">{rule.test(password) ? '✓' : '○'}</span>
+                  {rule.label}
+                </li>
+              ))}
+            </ul>
+          )}
+          {error && <p className="text-[13px] text-red-500">{error}</p>}
+          <div className="flex gap-2 mt-1">
+            <button
+              type="submit"
+              disabled={loading || !pwOk}
+              className="flex-1 py-3 rounded-full text-[14px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              style={{ background: BRAND }}
+            >
+              {loading ? 'Saving…' : 'Save password'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setOpen(false); setError(''); setPassword('') }}
+              className="px-5 py-3 rounded-full text-[14px] font-semibold border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </motion.div>
+  )
+}
+

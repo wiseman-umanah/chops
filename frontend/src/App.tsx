@@ -21,6 +21,7 @@ const PrivacyPage          = lazy(() => import('./pages/PrivacyPage'))
 const AuthPage             = lazy(() => import('./pages/auth/AuthPage'))
 const ForgotPasswordPage   = lazy(() => import('./pages/auth/ForgotPasswordPage'))
 const ResetPasswordPage    = lazy(() => import('./pages/auth/ResetPasswordPage'))
+const VerifyEmailPage      = lazy(() => import('./pages/auth/VerifyEmailPage'))
 
 const OverviewPage         = lazy(() => import('./pages/dashboard/OverviewPage'))
 const ChopFoodPage         = lazy(() => import('./pages/dashboard/ChopFoodPage'))
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/signup"          element={<AuthRoute />} />
         <Route path="/forgot-password" element={<Suspense fallback={<PageFallback />}><ForgotPasswordPage /></Suspense>} />
         <Route path="/reset-password"  element={<Suspense fallback={<PageFallback />}><ResetPasswordPage /></Suspense>} />
+        <Route path="/verify-email"    element={<Suspense fallback={<PageFallback />}><VerifyEmailPage /></Suspense>} />
 
         {/* Dashboard — protected */}
         <Route

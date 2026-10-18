@@ -210,4 +210,18 @@ export default defineSchema({
   })
     .index("by_referrer", ["referrerId"])
     .index("by_referred", ["referredId"]),
+
+  /**
+   * Short-lived 6-digit codes for post-signup email verification.
+   * Expires 5 minutes after creation. Deleted on successful verification.
+   */
+  emailVerifications: defineTable({
+    userId: v.string(),
+    email: v.string(),
+    code: v.string(),
+    expiresAt: v.number(),
+    verified: v.boolean(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_code", ["code"]),
 });

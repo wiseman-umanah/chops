@@ -241,6 +241,7 @@ function LoginForm() {
 // ── Signup form ───────────────────────────────────────────────────────────────
 function SignupForm({ initialRef }: { initialRef: string }) {
   const { signIn } = useAuthActions()
+  const navigate          = useNavigate()
   const recordReferral    = useMutation(api.referrals.recordReferral)
   const generateRefCode   = useMutation(api.referrals.generateReferralCode)
 
@@ -317,6 +318,8 @@ function SignupForm({ initialRef }: { initialRef: string }) {
           // Silently ignore — referral recording failure must never block signup
         })
       }
+      // Redirect to email verification before dashboard
+      navigate('/verify-email', { replace: true })
     } catch (err) {
       console.error('Signup error:', err)
       const msg = err instanceof Error ? err.message : ''

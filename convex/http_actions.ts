@@ -199,7 +199,7 @@ export const bachsWebhook = httpAction(async (_ctx, request) => {
         status: "inactive",
       });
 
-      // Notify organizer
+      // Notify organizer (in-app)
       const naira = Math.round(payout.amountKobo / 100).toLocaleString("en-NG");
       const masked = "•".repeat(payout.accountNumber.length - 4) + payout.accountNumber.slice(-4);
       await _ctx.runMutation(internal.notifications.insertSystemNotification, {
@@ -209,6 +209,26 @@ export const bachsWebhook = httpAction(async (_ctx, request) => {
         body: `Your payout to ${payout.bankName} (${masked}) has landed.`,
         sessionId: payout.sessionId,
       });
+
+      // Email organizer (non-fatal)
+      try {
+        const organizer = await _ctx.runQuery(internal.users.getById, {
+          userId: payout.organizerId,
+        });
+        if (organizer?.email) {
+          await _ctx.runAction(internal.notifications.sendOrganizerPayout, {
+            organizerEmail: organizer.email,
+            organizerName: organizer.name ?? organizer.email.split("@")[0],
+            sessionName: (await _ctx.runQuery(internal.sessions.getSessionById, { sessionId: payout.sessionId }))?.name ?? "Your session",
+            amountKobo: payout.amountKobo,
+            bankName: payout.bankName,
+            accountNumber: payout.accountNumber,
+            reference: payout.reference,
+          });
+        }
+      } catch (emailErr) {
+        console.warn("payout.paid: organizer email failed (non-fatal):", emailErr);
+      }
     } catch (err) {
       console.error("Bachs payout.paid: handler error", err);
       return new Response("Internal error", { status: 500 });
