@@ -2,6 +2,7 @@ import { cronJobs } from "convex/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 
 // ── Internal helpers ───────────────────────────────────────────────────────────
 
@@ -83,6 +84,57 @@ export const cleanupAbandonedParticipants = internalAction({
   },
 });
 
+// ── Orphaned authAccounts cleanup ─────────────────────────────────────────────
+
+/**
+ * Finds authAccounts rows whose linked users document no longer exists.
+ * These orphans crash @convex-dev/auth on password reset / sign-in.
+ */
+export const _findOrphanedAuthAccounts = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const accounts = await ctx.db.query("authAccounts").collect();
+    const orphans: Id<"authAccounts">[] = [];
+    for (const acc of accounts) {
+      const user = await ctx.db.get(acc.userId);
+      if (!user) orphans.push(acc._id);
+    }
+    return orphans;
+  },
+});
+
+/** Deletes a single authAccounts row by ID */
+export const _deleteAuthAccount = internalMutation({
+  args: { id: v.id("authAccounts") },
+  handler: async (ctx, { id }) => {
+    await ctx.db.delete(id);
+  },
+});
+
+/**
+ * Deletes any authAccounts rows whose users document no longer exists.
+ * Runs nightly so orphans from manual admin deletions never accumulate.
+ */
+export const cleanupOrphanedAuthAccounts = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const orphans = await ctx.runQuery(
+      internal.crons._findOrphanedAuthAccounts,
+      {}
+    );
+
+    console.log(
+      `[cron] cleanupOrphanedAuthAccounts: found ${orphans.length} orphaned rows`
+    );
+
+    for (const id of orphans) {
+      await ctx.runMutation(internal.crons._deleteAuthAccount, { id });
+    }
+
+    console.log(`[cron] cleanupOrphanedAuthAccounts: done`);
+  },
+});
+
 // ── Schedule ──────────────────────────────────────────────────────────────────
 
 const crons = cronJobs();
@@ -92,6 +144,14 @@ crons.daily(
   "cleanup abandoned chop-in participants",
   { hourUTC: 2, minuteUTC: 0 },
   internal.crons.cleanupAbandonedParticipants,
+  {}
+);
+
+// Every night at 2:05 AM UTC
+crons.daily(
+  "cleanup orphaned auth accounts",
+  { hourUTC: 2, minuteUTC: 5 },
+  internal.crons.cleanupOrphanedAuthAccounts,
   {}
 );
 

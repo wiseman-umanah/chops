@@ -171,7 +171,18 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [showPw, setShowPw]     = useState(false)
   const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
+  const [error, setError]       = useState<React.ReactNode>('')
+
+  // Detect Google-only accounts so we can show a helpful error on failure
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  const providerInfo = useQuery(
+    api.users.getProvidersByEmail,
+    isValidEmail ? { email } : 'skip'
+  )
+  const isGoogleOnly =
+    providerInfo !== undefined &&
+    providerInfo.providers.length > 0 &&
+    !providerInfo.providers.includes('password')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -181,7 +192,19 @@ function LoginForm() {
       await signIn('password', { email, password, flow: 'signIn' })
     } catch (err) {
       console.error('Login error:', err)
-      setError('Invalid email or password.')
+      if (isGoogleOnly) {
+        setError(
+          <span>
+            This account uses Google sign-in.{' '}
+            <Link to="/forgot-password" className="underline text-[#FF6900]">
+              Set a password here
+            </Link>{' '}
+            if you want to use email + password instead.
+          </span>
+        )
+      } else {
+        setError('Invalid email or password.')
+      }
     } finally {
       setLoading(false)
     }
@@ -210,6 +233,19 @@ function LoginForm() {
         onChange={setEmail}
         required
       />
+
+      {/* Proactive Google-only warning — shown as soon as email is recognised */}
+      {isGoogleOnly && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800 leading-relaxed">
+          <strong>This account uses Google.</strong> Use the Google button below to sign in,
+          or{' '}
+          <Link to="/forgot-password" className="underline font-semibold hover:text-amber-900">
+            set a password
+          </Link>{' '}
+          if you prefer email + password.
+        </div>
+      )}
+
       <div className="flex flex-col gap-1">
         <Field
           label="Password"
