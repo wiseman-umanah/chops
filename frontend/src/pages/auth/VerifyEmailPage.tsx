@@ -200,14 +200,6 @@ export default function VerifyEmailPage() {
                 )}
               </p>
 
-              <p className="text-center text-[13px] text-neutral-400 mt-4">
-                <button
-                  onClick={() => navigate('/dashboard', { replace: true })}
-                  className="text-neutral-400 hover:text-[#FF6900] transition-colors"
-                >
-                  Skip for now →
-                </button>
-              </p>
             </>
           )}
         </motion.div>

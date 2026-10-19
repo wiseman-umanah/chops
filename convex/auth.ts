@@ -16,6 +16,9 @@ const SITE = "https://usechop.xyz";
 const ResendOTP = Email({
   id: "resend-otp",
   apiKey: process.env.AUTH_RESEND_KEY,
+  generateVerificationToken: () => {
+    return String(Math.floor(100000 + Math.random() * 900000));
+  },
   sendVerificationRequest: async ({ identifier: email, provider, token }) => {
     const from = process.env.AUTH_EMAIL_FROM ?? "Chop <noreply@usechop.xyz>";
 

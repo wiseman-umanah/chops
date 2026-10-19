@@ -14,6 +14,8 @@ interface User {
 interface AuthContextValue {
   isAuthenticated: boolean
   isLoading: boolean
+  /** true once email is verified (or for Google OAuth users who are always verified) */
+  emailVerified: boolean
   user: User | null
   logout: () => Promise<void>
 }
@@ -29,6 +31,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated ? {} : 'skip'
   )
 
+  const verificationStatus = useQuery(
+    api.emailVerification.getVerificationStatus,
+    isAuthenticated ? {} : 'skip'
+  )
+
   const user: User | null = profile
     ? {
         firstName: profile.firstName ?? profile.name ?? 'User',
@@ -39,8 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     : null
 
+  // Google OAuth users have an image URL starting with "https" (from Google).
+  // They never go through the email verification flow — treat them as always verified.
+  const isGoogleUser = !!(profile?.image && String(profile.image).startsWith('http'))
+  const emailVerified = isGoogleUser || !!(verificationStatus?.verified)
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, logout: signOut }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, emailVerified, user, logout: signOut }}>
       {children}
     </AuthContext.Provider>
   )
