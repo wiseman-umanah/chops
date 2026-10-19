@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuthActions } from '@convex-dev/auth/react'
+import { useQuery } from 'convex/react'
+import { api } from '../../../../convex/_generated/api'
 import Logo from '@/components/Logo'
 import RemixIcon from '@/components/RemixIcon'
 import { Seo } from '@/hooks/useSeo'
@@ -15,6 +17,21 @@ export default function ForgotPasswordPage() {
   const [loading,    setLoading]  = useState(false)
   const [error,      setError]    = useState('')
   const [sent,       setSent]     = useState(false)
+
+  // Check providers for this email — only query once they've typed a plausible address
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  const providerInfo = useQuery(
+    api.users.getProvidersByEmail,
+    isValidEmail ? { email } : 'skip'
+  )
+  // Google-only = has google provider but no password provider yet.
+  // We still allow the reset flow — @convex-dev/auth will link a password
+  // account to the existing Google user. Just show an informational hint.
+  const isGoogleOnly =
+    isValidEmail &&
+    providerInfo !== undefined &&
+    providerInfo.providers.length > 0 &&
+    !providerInfo.providers.includes('password')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -97,6 +114,12 @@ export default function ForgotPasswordPage() {
                   className="w-full rounded-full border border-neutral-200 bg-white px-4 py-3 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:border-[#FF6900] transition-colors"
                 />
               </div>
+
+              {isGoogleOnly && (
+                <p className="text-[13px] text-amber-600 px-1">
+                  This email uses Google sign-in. You can still set a password below — after verifying, you'll be able to log in with either Google or email + password.
+                </p>
+              )}
 
               {error && (
                 <p className="text-[13px] text-red-500 px-1">{error}</p>

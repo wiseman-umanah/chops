@@ -106,3 +106,31 @@ export const auditLegacySessions = query({
     return { legacySessionCount: legacySessions.length, pendingCount, paidCount };
   },
 });
+
+/**
+ * Deletes authAccounts rows whose linked users document no longer exists.
+ * These orphans crash @convex-dev/auth when password reset or sign-in is
+ * attempted for the affected email — the library finds the account row but
+ * then tries to patch a non-existent users doc.
+ *
+ * Safe to run multiple times (idempotent).
+ */
+export const cleanupOrphanedAuthAccounts = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const accounts = await ctx.db.query("authAccounts").collect();
+    let deleted = 0;
+
+    for (const acc of accounts) {
+      const user = await ctx.db.get(acc.userId);
+      if (!user) {
+        await ctx.db.delete(acc._id);
+        deleted++;
+        console.log(`Deleted orphaned authAccount ${acc._id} (provider: ${acc.provider}, providerAccountId: ${acc.providerAccountId})`);
+      }
+    }
+
+    console.log(`cleanupOrphanedAuthAccounts: deleted ${deleted} orphaned rows.`);
+    return { deleted };
+  },
+});

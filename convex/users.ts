@@ -72,6 +72,30 @@ export const updateProfile = mutation({
   },
 });
 
+/**
+ * Given an email address, returns which auth providers are linked to it.
+ * Used by ForgotPasswordPage to detect Google-only accounts before attempting reset.
+ */
+export const getProvidersByEmail = query({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const users = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email))
+      .collect();
+
+    if (users.length === 0) return { providers: [] };
+
+    const userId = users[0]._id;
+    const accounts = await ctx.db
+      .query("authAccounts")
+      .withIndex("userIdAndProvider", (q) => q.eq("userId", userId))
+      .collect();
+
+    return { providers: accounts.map((a) => a.provider) };
+  },
+});
+
 /** Internal — fetch a user row by ID. Used by webhook handlers to get organizer email. */
 export const getById = internalQuery({
   args: { userId: v.string() },
