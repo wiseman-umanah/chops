@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Seo } from '@/hooks/useSeo'
+import { sanitizeAppError } from '@/lib/authErrors'
 import { useAuth } from '@/contexts/AuthContext'
 import RemixIcon from '@/components/RemixIcon'
 import { useQuery, useAction, useMutation } from 'convex/react'
@@ -129,7 +130,7 @@ function FinalizeModal({ session, onClose }: FinalizeModalProps) {
       setDoneInfo({ resolvedName: result.resolvedName })
       setDone(true)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Payout failed')
+      setError(sanitizeAppError(e, 'Payout failed. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -408,7 +409,7 @@ const STATS = [
     try {
       await deleteSession({ sessionId })
     } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : 'Could not delete chop')
+      setDeleteError(sanitizeAppError(e, 'Could not delete this chop. Please try again.'))
     } finally {
       setDeletingId(null)
     }
@@ -428,7 +429,7 @@ const STATS = [
     try {
       await closeSessionFn({ sessionId })
     } catch (e) {
-      setCloseError(e instanceof Error ? e.message : 'Could not close session')
+      setCloseError(sanitizeAppError(e, 'Could not close this session. Please try again.'))
     } finally {
       setClosingId(null)
     }

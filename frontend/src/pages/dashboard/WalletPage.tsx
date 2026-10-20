@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { sanitizeAppError } from '@/lib/authErrors'
 import { Seo } from '@/hooks/useSeo'
 import { useQuery, useAction } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
@@ -102,7 +103,7 @@ function WithdrawModal({ session, onClose }: WithdrawModalProps) {
       setDoneInfo({ resolvedName: result.resolvedName })
       setDone(true)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Withdrawal failed')
+      setError(sanitizeAppError(e, 'Withdrawal failed. Please try again.'))
     } finally {
       setLoading(false)
     }

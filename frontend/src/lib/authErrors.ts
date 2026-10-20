@@ -1,12 +1,11 @@
 /**
- * Sanitizes raw @convex-dev/auth error messages into user-friendly strings.
+ * Auth + app error sanitizers.
  *
- * Raw library errors (e.g. "InvalidAccountId", "Invalid credentials") must
- * never be shown to users — they leak internal details and confuse non-technical
- * users. All auth catch blocks must call sanitizeAuthError(err, flow).
+ * Raw Convex / library errors must never reach the user as-is — they leak
+ * internal details and confuse non-technical users.
  *
- * Strategy: allowlist known safe patterns; everything else → generic fallback.
- * Unknown future library errors automatically fall through safely.
+ * Strategy: allowlist known safe patterns per context; everything else →
+ * a calm generic fallback. Unknown future errors fall through safely.
  */
 
 export type AuthFlow =
@@ -97,4 +96,80 @@ export function sanitizeAuthError(err: unknown, flow: AuthFlow = 'signIn'): stri
     return raw
 
   return 'Something went wrong. Please try again.'
+}
+
+// ── App error sanitizer ───────────────────────────────────────────────────────
+
+/**
+ * Sanitizes errors thrown by Convex mutations/actions in app flows
+ * (payments, session management, profile, payout, etc.).
+ *
+ * Messages written by YOUR OWN backend code are short, plain English, and
+ * safe to show — they pass through. Everything else (Convex internals,
+ * network errors, stack traces) → calm generic fallback.
+ *
+ * @param fallback  Optional custom fallback if you want something more
+ *                  specific than "Something went wrong."
+ */
+export function sanitizeAppError(err: unknown, fallback?: string): string {
+  const DEFAULT = fallback ?? 'Something went wrong. Please try again.'
+  const raw   = err instanceof Error ? err.message : String(err)
+  const lower = raw.toLowerCase()
+
+  // ── Always block server/library internals ────────────────────────────────────
+  if (
+    lower.includes('server error')   ||
+    lower.includes('uncaught error') ||
+    lower.includes('convex')         ||
+    lower.includes('at async')       ||   // stack frame
+    raw.includes('    at ')          ||   // stack frame indent
+    raw.includes('\n')               ||   // multi-line = stack trace
+    raw.startsWith('Error:')         ||
+    raw.length > 200
+  ) return DEFAULT
+
+  // ── Network / connectivity ───────────────────────────────────────────────────
+  if (lower.includes('network') || lower.includes('fetch') || lower.includes('failed to fetch'))
+    return 'Connection error. Check your internet and try again.'
+
+  // ── Known app-level messages from YOUR backend — pass through as-is ──────────
+  // These are messages you wrote in convex/*.ts that are safe and user-friendly.
+  // They're short, plain English, and contain no internal details.
+  // Everything else falls through to the generic fallback below.
+  const SAFE_PATTERNS = [
+    'session not found',
+    'not your session',
+    'already paid',
+    'cannot edit a session',
+    'at least one participant',
+    'percentages must add up',
+    'custom amounts must add up',
+    'minimum target amount',
+    'minimum contribution',
+    'session must be completed',
+    'payout for this session is already',
+    'failed to register bank account',
+    'could not resolve account',
+    'insufficient',
+    'temporarily unavailable',
+    'not authenticated',
+    'upload failed',
+    'could not save',
+    'invalid email',
+    'incorrect or expired',
+    'already exists',
+    'goal amount is required',
+  ]
+
+  if (SAFE_PATTERNS.some(p => lower.includes(p))) return raw
+
+  // ── Short plain messages with no suspicious tokens — likely safe ─────────────
+  if (
+    raw.length <= 120 &&
+    !raw.includes('Error') &&
+    !raw.includes('\n') &&
+    !raw.includes('    ')
+  ) return raw
+
+  return DEFAULT
 }

@@ -6,6 +6,7 @@ import { useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
 import { BACHS_WITHDRAWAL_FEE_KOBO, CHOPIN_FEE_THRESHOLD_KOBO } from '@/lib/fees'
+import { sanitizeAppError } from '@/lib/authErrors'
 
 const BRAND = '#00C950'
 
@@ -111,8 +112,8 @@ export default function ChopInPage() {
         })
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Something went wrong'
-      if (msg.toLowerCase().includes('payment')) {
+      const msg = sanitizeAppError(e)
+      if ((e instanceof Error ? e.message : '').toLowerCase().includes('payment')) {
         navigate('/dashboard', { state: { notice: msg } })
       } else {
         setError(msg)

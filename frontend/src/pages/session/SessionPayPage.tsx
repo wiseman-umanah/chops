@@ -5,6 +5,7 @@ import { api } from '../../../../convex/_generated/api'
 import RemixIcon from '@/components/RemixIcon'
 import { Seo } from '@/hooks/useSeo'
 import { calculateSettlementFeeNaira, computeParticipantFees, computeChopInCharge, CHOPIN_MIN_CONTRIBUTION_KOBO } from '@/lib/fees'
+import { sanitizeAppError } from '@/lib/authErrors'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -222,7 +223,7 @@ export default function SessionPayPage() {
       // Redirect to Bachs-hosted checkout page
       window.location.href = checkoutUrl
     } catch (e) {
-      setPayError(e instanceof Error ? e.message : 'Payment failed. Please try again.')
+      setPayError(sanitizeAppError(e, 'Payment failed. Please try again.'))
       setPaying(false)
     }
   }

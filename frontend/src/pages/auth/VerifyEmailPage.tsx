@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Seo } from '@/hooks/useSeo'
+import { sanitizeAppError } from '@/lib/authErrors'
 import { motion } from 'framer-motion'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
@@ -111,7 +112,7 @@ export default function VerifyEmailPage() {
       await verifyCode({ code })
       setDone(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Incorrect or expired code.')
+      setError(sanitizeAppError(err, 'Incorrect or expired code. Please try again.'))
     } finally {
       setLoading(false)
     }

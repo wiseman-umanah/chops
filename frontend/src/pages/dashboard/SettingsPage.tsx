@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { sanitizeAuthError } from '@/lib/authErrors'
+import { sanitizeAuthError, sanitizeAppError } from '@/lib/authErrors'
 import { Seo } from '@/hooks/useSeo'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthActions } from '@convex-dev/auth/react'
@@ -258,7 +258,7 @@ export default function SettingsPage() {
       await updateProfile({ imageStorageId: storageId })
       setAvatarSuccess(true)
     } catch (err) {
-      setAvatarError(err instanceof Error ? err.message : 'Upload failed')
+      setAvatarError(sanitizeAppError(err, 'Photo upload failed. Please try again.'))
       setAvatarPreview(null)
     } finally {
       setUploading(false)
@@ -276,7 +276,7 @@ export default function SettingsPage() {
       await updateProfile({ firstName: firstName.trim(), lastName: lastName.trim() || undefined })
       setNameSuccess(true)
     } catch (err) {
-      setNameError(err instanceof Error ? err.message : 'Could not save name')
+      setNameError(sanitizeAppError(err, 'Could not save your name. Please try again.'))
     } finally {
       setNameSaving(false)
     }
@@ -293,13 +293,14 @@ export default function SettingsPage() {
       await signIn('password', { email: user.email, password: newPw,     flow: 'signUp'  })
       setPwSuccess(true)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : ''
-      if (msg.toLowerCase().includes('exists') || msg.toLowerCase().includes('already')) {
+      const raw = err instanceof Error ? err.message : ''
+      const lower = raw.toLowerCase()
+      if (lower.includes('exists') || lower.includes('already')) {
         setPwSuccess(true)
-      } else if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('incorrect')) {
+      } else if (lower.includes('invalid') || lower.includes('incorrect') || lower.includes('invalidaccountid')) {
         setPwError('Current password is incorrect.')
       } else {
-        setPwError(msg || 'Could not update password. Please try again.')
+        setPwError(sanitizeAppError(err, 'Could not update password. Please try again.'))
       }
     } finally {
       setPwLoading(false)

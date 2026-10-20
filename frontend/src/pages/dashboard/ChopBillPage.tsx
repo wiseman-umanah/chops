@@ -6,6 +6,7 @@ import { useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
 import { calculateSettlementFeeNaira, computeParticipantFees } from '@/lib/fees'
+import { sanitizeAppError } from '@/lib/authErrors'
 
 const BRAND = '#FB2C36'
 
@@ -322,8 +323,8 @@ export default function ChopBillPage() {
         })
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Something went wrong'
-      if (msg.toLowerCase().includes('payment')) {
+      const msg = sanitizeAppError(e)
+      if ((e instanceof Error ? e.message : '').toLowerCase().includes('payment')) {
         navigate('/dashboard', { state: { notice: msg } })
       } else {
         setError(msg)
