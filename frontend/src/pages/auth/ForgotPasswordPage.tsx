@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { sanitizeAuthError } from '@/lib/authErrors'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuthActions } from '@convex-dev/auth/react'
@@ -46,7 +47,7 @@ export default function ForgotPasswordPage() {
       await signIn('password', { email, flow: 'reset' })
       setSent(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send reset email. Please try again.')
+      setError(sanitizeAuthError(err, 'reset'))
     } finally {
       setLoading(false)
     }

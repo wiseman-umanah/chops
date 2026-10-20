@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { sanitizeAuthError } from '@/lib/authErrors'
 import { Seo } from '@/hooks/useSeo'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthActions } from '@convex-dev/auth/react'
@@ -761,10 +762,7 @@ function LinkPasswordSection() {
       setDone(true)
       setOpen(false)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : ''
-      setError(msg.includes('already exists')
-        ? 'A password is already set on this account.'
-        : msg || 'Could not link password. Please try again.')
+      setError(sanitizeAuthError(err, 'linkCredential'))
     } finally {
       setLoading(false)
     }

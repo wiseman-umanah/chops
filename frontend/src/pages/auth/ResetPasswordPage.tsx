@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Seo } from '@/hooks/useSeo'
+import { sanitizeAuthError } from '@/lib/authErrors'
 import { motion } from 'framer-motion'
 import { useAuthActions } from '@convex-dev/auth/react'
 import Logo from '@/components/Logo'
@@ -92,7 +93,7 @@ export default function ResetPasswordPage() {
       })
       setDone(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid code or password. Please try again.')
+      setError(sanitizeAuthError(err, 'reset-verification'))
     } finally {
       setLoading(false)
     }
