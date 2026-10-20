@@ -36,6 +36,11 @@ export default function ForgotPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+
+    // Google-only accounts have no password credential — the reset flow would
+    // crash with InvalidAccountId. Block it here and guide them instead.
+    if (isGoogleOnly) return
+
     setLoading(true)
     try {
       await signIn('password', { email, flow: 'reset' })
@@ -116,9 +121,14 @@ export default function ForgotPasswordPage() {
               </div>
 
               {isGoogleOnly && (
-                <p className="text-[13px] text-amber-600 px-1">
-                  This email uses Google sign-in. You can still set a password below — after verifying, you'll be able to log in with either Google or email + password.
-                </p>
+                <div className="rounded-2xl px-4 py-3.5 flex flex-col gap-1.5" style={{ background: '#fff7ed' }}>
+                  <p className="text-[13px] font-semibold text-amber-700">
+                    This account uses Google sign-in
+                  </p>
+                  <p className="text-[13px] text-amber-600 leading-relaxed">
+                    Password reset isn't available for Google accounts. Sign in with Google, then go to <strong>Settings → Set a password</strong> to add email + password login.
+                  </p>
+                </div>
               )}
 
               {error && (
@@ -127,7 +137,7 @@ export default function ForgotPasswordPage() {
 
               <button
                 type="submit"
-                disabled={loading || !email}
+                disabled={loading || !email || isGoogleOnly}
                 className="w-full py-3.5 rounded-full text-[14px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
                 style={{ background: BRAND }}
               >
