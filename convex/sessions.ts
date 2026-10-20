@@ -94,6 +94,9 @@ export const createSession = mutation({
       if (!goalAmount || goalAmount <= 0) {
         throw new Error("A positive goal amount is required for Chop In");
       }
+      if (goalAmount < 100_000) {
+        throw new Error("Minimum target amount for Chop In is ₦1,000");
+      }
     }
 
     if (mode === "bill") {
@@ -244,6 +247,11 @@ export const editSession = mutation({
       .filter((q) => q.eq(q.field("status"), "sent"))
       .first();
     if (paid) throw new Error("Cannot edit a session that already has payments");
+
+    // Chop-in minimum validation
+    if (session.mode === "chop-in" && goalAmount !== undefined && goalAmount < 100_000) {
+      throw new Error("Minimum target amount for Chop In is ₦1,000");
+    }
 
     const patch: Partial<typeof session> = {};
     if (name !== undefined) patch.name = name.trim();
@@ -589,6 +597,12 @@ export const getOrganizerSessions = query({
 
         return {
           ...session,
+          participants: participants.map(({ name, items, sharePercent, amountOwed }) => ({
+            name,
+            amountOwed,
+            items,
+            sharePercent,
+          })),
           participantCount: participants.length,
           paidCount,
           paidAmount,

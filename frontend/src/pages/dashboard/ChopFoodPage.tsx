@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
-import { computeFees } from '@/lib/fees'
+import { calculateSettlementFeeNaira, computeParticipantFees } from '@/lib/fees'
 
 const BRAND = '#FF6900'
 
@@ -118,20 +118,50 @@ function prefillParticipantsRaw(es: EditSession): string {
 }
 
 function prefillItems(es: EditSession): MenuItem[] {
-  // Flatten all items from all participants; assign participant name to each
-  const result: MenuItem[] = []
+  // Items assigned to "Everyone" were fanned out to every participant at save time
+  // with the same name and same price. Detect them by finding items whose (name, price)
+  // pair appears on ALL participants, and collapse them back to a single "Everyone" row.
+  const pCount = es.participants.length
+
+  // Build a frequency map: key = "name::price" → count of participants that have it
+  const freq: Record<string, number> = {}
   for (const p of es.participants) {
     for (const item of p.items ?? []) {
-      result.push({
-        id: uid(),
-        name: item.name,
-        // items are stored as kobo total (qty already baked in) — display as naira per item
-        qty: 1,
-        price: item.price / 100,
-        participant: p.name,
-      })
+      const key = `${item.name}::${item.price}`
+      freq[key] = (freq[key] ?? 0) + 1
     }
   }
+
+  const result: MenuItem[] = []
+  const addedEveryoneKeys = new Set<string>()
+
+  for (const p of es.participants) {
+    for (const item of p.items ?? []) {
+      const key = `${item.name}::${item.price}`
+      if (pCount > 1 && freq[key] === pCount) {
+        // This item is on every participant — it was an "Everyone" item
+        if (!addedEveryoneKeys.has(key)) {
+          addedEveryoneKeys.add(key)
+          result.push({
+            id: uid(),
+            name: item.name,
+            qty: 1,
+            price: item.price / 100, // kobo → naira
+            participant: 'Everyone',
+          })
+        }
+      } else {
+        result.push({
+          id: uid(),
+          name: item.name,
+          qty: 1,
+          price: item.price / 100, // kobo → naira
+          participant: p.name,
+        })
+      }
+    }
+  }
+
   return result.length > 0
     ? result
     : [{ id: uid(), name: '', qty: 1, price: 0, participant: 'Everyone' }]
@@ -239,8 +269,12 @@ export default function ChopFoodPage() {
       namedPeople.map(p => {
         const myItems: { name: string; price: number }[] = []
         items.forEach(it => {
-          if (it.participant === p || it.participant === 'Everyone') {
-            myItems.push({ name: it.name || 'Item', price: Math.round(it.price * 100) * it.qty })
+          const lineTotal = Math.round(it.price * 100) * it.qty
+          if (it.participant === 'Everyone') {
+            // Store each person's proportional share so amountOwed is correct
+            myItems.push({ name: it.name || 'Item', price: Math.round(lineTotal / namedPeople.length) })
+          } else if (it.participant === p) {
+            myItems.push({ name: it.name || 'Item', price: lineTotal })
           }
         })
         return { name: p, items: myItems }
@@ -514,47 +548,65 @@ export default function ChopFoodPage() {
             <h3 className="text-[18px] font-bold mb-5">Split breakdown</h3>
 
             <div className="flex flex-col gap-2 mb-5">
-              {namedPeople.length > 0 ? namedPeople.map(p => (
-                <div key={p} className="flex justify-between text-[14px]">
-                  <span>{p}</span>
-                  <span className="font-semibold">{formatNaira(perPerson[p] ?? 0)}</span>
-                </div>
-              )) : (
+              {namedPeople.length > 0 ? (() => {
+                const settlementFee = calculateSettlementFeeNaira(totalKobo, namedPeople.length)
+                return namedPeople.map(p => {
+                  const shareKobo = Math.round((perPerson[p] ?? 0) * 100)
+                  const fb        = computeParticipantFees(shareKobo, totalKobo, settlementFee)
+                  const chargeKobo = fb.principalShareKobo + fb.feeShareKobo
+                  return (
+                    <div key={p} className="flex justify-between text-[14px]">
+                      <span>{p}</span>
+                      <div className="text-right">
+                        <span className="font-semibold">{formatNaira(Math.round(chargeKobo / 100))}</span>
+                        <span className="text-white/60 text-[11px] block">{formatNaira(perPerson[p] ?? 0)} + fee</span>
+                      </div>
+                    </div>
+                  )
+                })
+              })() : (
                 <p className="text-[13px] text-white/60">Add participants above to see the split.</p>
               )}
             </div>
 
             <div className="border-t border-white/30 my-4" />
 
-            <div className="flex flex-col gap-2 text-[14px] mb-6">
-              <div className="flex justify-between">
-                <span className="font-semibold">Subtotal</span>
-                <span className="font-semibold">{formatNaira(subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-semibold">Tax</span>
-                <span className="font-semibold">{formatNaira(tax)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-semibold">Tip</span>
-                <span className="font-semibold">{formatNaira(tip)}</span>
-              </div>
-              <div className="flex justify-between text-[15px] font-bold mt-1">
-                <span>Total bill</span>
-                <span>{formatNaira(total)}</span>
-              </div>
-              {namedPeople.length > 0 && totalKobo > 0 && (() => {
-                // Show estimated platform fee per person (2% of their share, capped ₦2,000)
-                const sampleShare = Math.round(totalKobo / namedPeople.length)
-                const sampleFee = computeFees(sampleShare).platformFeeKobo
-                return (
-                  <div className="flex justify-between text-white/70 text-[13px]">
-                    <span>+ Service fee per person (est. 2%)</span>
-                    <span>+{formatNaira(sampleFee)}</span>
+            {(() => {
+              const settlementFee  = namedPeople.length > 0 && totalKobo > 0
+                ? calculateSettlementFeeNaira(totalKobo, namedPeople.length)
+                : 0
+              const totalChargedKobo = namedPeople.reduce((s, p) => {
+                const shareKobo = Math.round((perPerson[p] ?? 0) * 100)
+                const fb        = computeParticipantFees(shareKobo, totalKobo, settlementFee)
+                return s + fb.principalShareKobo + fb.feeShareKobo
+              }, 0)
+              return (
+                <div className="flex flex-col gap-2 text-[14px] mb-6">
+                  <div className="flex justify-between">
+                    <span className="font-semibold">Subtotal</span>
+                    <span className="font-semibold">{formatNaira(namedPeople.length > 0 && totalChargedKobo > 0 ? Math.round(totalChargedKobo / 100) : subtotal)}</span>
                   </div>
-                )
-              })()}
-            </div>
+                  <div className="flex justify-between">
+                    <span className="font-semibold">Tax</span>
+                    <span className="font-semibold">{formatNaira(tax)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-semibold">Tip</span>
+                    <span className="font-semibold">{formatNaira(tip)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold mt-1">
+                    <span>Total bill</span>
+                    <span>{formatNaira(total)}</span>
+                  </div>
+                  {namedPeople.length > 0 && totalKobo > 0 && (
+                    <div className="flex justify-between text-[15px] font-bold mt-1 border-t border-white/20 pt-2">
+                      <span>Total charged</span>
+                      <span>{formatNaira(Math.round(totalChargedKobo / 100))}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             <button
               onClick={handleSubmit}

@@ -134,3 +134,66 @@ export const cleanupOrphanedAuthAccounts = mutation({
     return { deleted };
   },
 });
+
+/**
+ * Fixes food session participants whose amountOwed was inflated by the Everyone-item
+ * bug: Everyone items were stored at full line price per participant instead of
+ * price/n. Recomputes amountOwed from each participant's items list.
+ *
+ * Only patches pending (unpaid) participants — paid rows are history.
+ * Safe to run multiple times (idempotent via items-based recomputation).
+ */
+export const fixFoodAmountOwed = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const allSessions = await ctx.db.query("sessions").collect();
+    const foodSessions = allSessions.filter((s) => s.mode === "food");
+
+    let patched = 0;
+    let skipped = 0;
+
+    for (const session of foodSessions) {
+      const participants = await ctx.db
+        .query("participants")
+        .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+        .collect();
+
+      const n = participants.length;
+      if (n === 0) continue;
+
+      // Detect Everyone items: same (name, price) on ALL participants
+      const freq: Record<string, number> = {};
+      for (const p of participants) {
+        for (const item of p.items ?? []) {
+          const key = `${item.name}::${item.price}`;
+          freq[key] = (freq[key] ?? 0) + 1;
+        }
+      }
+
+      const taxTip = (session.taxKobo ?? 0) + (session.tipKobo ?? 0);
+      const itemsSubtotal = session.totalAmount - taxTip;
+      const taxTipRatio = itemsSubtotal > 0 ? taxTip / itemsSubtotal : 0;
+
+      for (const p of participants) {
+        if (p.status !== "pending") { skipped++; continue; }
+        if (!p.items || p.items.length === 0) { skipped++; continue; }
+
+        // For Everyone items, each participant's share is price/n
+        const itemsTotal = p.items.reduce((s, item) => {
+          const key = `${item.name}::${item.price}`;
+          const isEveryone = n > 1 && freq[key] === n;
+          return s + (isEveryone ? Math.round(item.price / n) : item.price);
+        }, 0);
+        const correctAmountOwed = Math.round(itemsTotal * (1 + taxTipRatio));
+
+        if (correctAmountOwed === p.amountOwed) { skipped++; continue; }
+
+        await ctx.db.patch(p._id, { amountOwed: correctAmountOwed });
+        console.log(`Patched ${p.name}: ${p.amountOwed} → ${correctAmountOwed}`);
+        patched++;
+      }
+    }
+
+    return { patched, skipped };
+  },
+});

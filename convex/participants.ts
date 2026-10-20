@@ -75,6 +75,19 @@ export const getParticipantsBySession = query({
 });
 
 /**
+ * Internal version — same as above but callable from actions via internal.*.
+ */
+export const getParticipantsBySessionInternal = internalQuery({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, { sessionId }) => {
+    return ctx.db
+      .query("participants")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect();
+  },
+});
+
+/**
  * Called ONLY by the Bachs webhook HTTP action after signature verification.
  * Internal-only — cannot be called by any authenticated frontend client.
  *

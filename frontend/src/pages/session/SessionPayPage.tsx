@@ -4,7 +4,7 @@ import { useQuery, useAction } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import RemixIcon from '@/components/RemixIcon'
 import { Seo } from '@/hooks/useSeo'
-import { computeFees } from '@/lib/fees'
+import { calculateSettlementFeeNaira, computeParticipantFees, computeChopInCharge, CHOPIN_MIN_CONTRIBUTION_KOBO } from '@/lib/fees'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -15,9 +15,6 @@ const MODE_COLOR: Record<string, string> = {
   'chop-in': '#00C950',
   bill:     '#FB2C36',
 }
-
-// Minimum contribution for chop-in (₦100 = 10,000 kobo)
-const MIN_CONTRIBUTION_KOBO = 10_000
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -174,9 +171,14 @@ export default function SessionPayPage() {
   // For the final gap: if remaining < global min, lower the effective min to
   // the remaining amount so it can still be filled exactly.
   const remaining = Math.max(0, goal - collected)
-  const effectiveMin = isChopIn && remaining > 0 && remaining < MIN_CONTRIBUTION_KOBO
+  const effectiveMin = isChopIn && remaining > 0 && remaining < CHOPIN_MIN_CONTRIBUTION_KOBO
     ? remaining
-    : MIN_CONTRIBUTION_KOBO
+    : CHOPIN_MIN_CONTRIBUTION_KOBO
+
+  // Chop-in fee breakdown (derived; only meaningful when contributionKobo > 0)
+  const chopInCharge = isChopIn && contributionKobo > 0
+    ? computeChopInCharge(contributionKobo)
+    : null
 
   const sessionId = session._id
 
@@ -348,30 +350,23 @@ export default function SessionPayPage() {
             </div>
 
             {/* Fee summary card — chop-in */}
-            {contributionKobo > 0 && (() => {
-              const fees = computeFees(contributionKobo)
-              return (
-                <div className="rounded-2xl border border-neutral-100 bg-neutral-50 px-5 py-4 mb-5 flex flex-col gap-2">
-                  <div className="flex justify-between text-[13px]">
-                    <span className="text-neutral-500">Your contribution</span>
-                    <span className="font-semibold text-neutral-800">{formatNaira(fees.amountDueKobo)}</span>
-                  </div>
-                  <div className="flex justify-between text-[13px]">
-                    <span className="text-neutral-500">Service fee (2%, max ₦2,000)</span>
-                    <span className="font-semibold text-neutral-500">{formatNaira(fees.platformFeeKobo)}</span>
-                  </div>
-                  <div className="flex justify-between text-[13px]">
-                    <span className="text-neutral-500">Processing (est.)</span>
-                    <span className="font-semibold text-neutral-500">{formatNaira(fees.estimatedBachsFeeKobo)}</span>
-                  </div>
-                  <div className="border-t border-neutral-200 pt-2 flex justify-between text-[14px]">
-                    <span className="font-bold text-neutral-800">Total to pay</span>
-                    <span className="font-extrabold" style={{ color: accentColor }}>{formatNaira(fees.estimatedTotalKobo)}</span>
-                  </div>
-                  <p className="text-[11px] text-neutral-400 mt-1">Your contribution goes to the group. Service fee supports the app. Processing is charged by the payment provider.</p>
+            {chopInCharge && (
+              <div className="rounded-2xl border border-neutral-100 bg-neutral-50 px-5 py-4 mb-5 flex flex-col gap-2">
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-neutral-500">Your contribution</span>
+                  <span className="font-semibold text-neutral-800">{formatNaira(contributionKobo)}</span>
                 </div>
-              )
-            })()}
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-neutral-500">Platform fee</span>
+                  <span className="font-semibold text-neutral-500">{formatNaira(chopInCharge.platformFeeKobo)}</span>
+                </div>
+                <div className="border-t border-neutral-200 pt-2 flex justify-between text-[14px]">
+                  <span className="font-bold text-neutral-800">Total</span>
+                  <span className="font-extrabold" style={{ color: accentColor }}>{formatNaira(contributionKobo + chopInCharge.platformFeeKobo)}</span>
+                </div>
+                <p className="text-[11px] text-neutral-400 mt-1">Your full contribution goes to the group. A small processing fee may be added by Bachs at checkout.</p>
+              </div>
+            )}
           </>
         )}
 
@@ -421,28 +416,26 @@ export default function SessionPayPage() {
 
             {/* Fee summary card — food / bill */}
             {currentParticipant && (() => {
-              const fees = computeFees(currentParticipant.amountOwed)
+              const settlementFeeNaira = calculateSettlementFeeNaira(totalAmount, participants.length)
+              const fees = computeParticipantFees(currentParticipant.amountOwed, totalAmount, settlementFeeNaira)
+              const chargeKobo = fees.principalShareKobo + fees.feeShareKobo
               return (
                 <div className="rounded-2xl border border-neutral-100 bg-neutral-50 px-5 py-4 mb-5 flex flex-col gap-2">
                   <div className="flex justify-between text-[13px]">
                     <span className="text-neutral-500">
                       Your share{currentParticipant.sharePercent !== undefined ? ` (${currentParticipant.sharePercent}%)` : ''}
                     </span>
-                    <span className="font-semibold text-neutral-800">{formatNaira(fees.amountDueKobo)}</span>
+                    <span className="font-semibold text-neutral-800">{formatNaira(fees.principalShareKobo)}</span>
                   </div>
                   <div className="flex justify-between text-[13px]">
-                    <span className="text-neutral-500">Service fee (2%, max ₦2,000)</span>
-                    <span className="font-semibold text-neutral-500">{formatNaira(fees.platformFeeKobo)}</span>
-                  </div>
-                  <div className="flex justify-between text-[13px]">
-                    <span className="text-neutral-500">Processing (est.)</span>
-                    <span className="font-semibold text-neutral-500">{formatNaira(fees.estimatedBachsFeeKobo)}</span>
+                    <span className="text-neutral-500">Service fee</span>
+                    <span className="font-semibold text-neutral-500">{formatNaira(fees.feeShareKobo)}</span>
                   </div>
                   <div className="border-t border-neutral-200 pt-2 flex justify-between text-[14px]">
-                    <span className="font-bold text-neutral-800">Total to pay</span>
-                    <span className="font-extrabold" style={{ color: accentColor }}>{formatNaira(fees.estimatedTotalKobo)}</span>
+                    <span className="font-bold text-neutral-800">Charged to card</span>
+                    <span className="font-extrabold" style={{ color: accentColor }}>{formatNaira(chargeKobo)}</span>
                   </div>
-                  <p className="text-[11px] text-neutral-400 mt-1">Your share goes to the group. Service fee supports the app. Processing is charged by the payment provider.</p>
+                  <p className="text-[11px] text-neutral-400 mt-1">Your share goes to the group. Service fee supports the app. A small processing fee will be added by the payment provider at checkout.</p>
                 </div>
               )
             })()}
@@ -505,9 +498,15 @@ export default function SessionPayPage() {
               {paying
                 ? 'Processing…'
                 : (() => {
-                    const amtDue = isChopIn ? contributionKobo : (currentParticipant?.amountOwed ?? 0)
-                    const fees = computeFees(amtDue)
-                    return `Pay ${formatNaira(fees.checkoutAmountKobo)}`
+                    if (isChopIn) {
+                      return chopInCharge
+                        ? `Pay ${formatNaira(contributionKobo + chopInCharge.platformFeeKobo)}`
+                        : 'Pay'
+                    }
+                    if (!currentParticipant) return 'Pay'
+                    const sf = calculateSettlementFeeNaira(totalAmount, participants.length)
+                    const fb = computeParticipantFees(currentParticipant.amountOwed, totalAmount, sf)
+                    return `Pay ${formatNaira(fb.principalShareKobo + fb.feeShareKobo)}`
                   })()}
             </button>
           </>

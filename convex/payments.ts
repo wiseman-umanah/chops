@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { action, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { computeFees } from "./fees";
+import { calculateSettlementFeeNaira, computeParticipantFees, computeChopInCharge, CHOPIN_MIN_CONTRIBUTION_KOBO } from "./fees";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -62,7 +62,7 @@ export const internalPatchPayerEmail = internalMutation({
 });
 
 /**
- * Internal helper — stores the platform fee on a participant row after
+ * Internal helper — stores the settlement fee share on a participant row after
  * checkout is initiated. Kept separate so initiateCheckout (action) can
  * write back to the DB without embedding a full mutation inline.
  */
@@ -152,6 +152,9 @@ export const initiateCheckout = action({
       if (!args.amountKobo || args.amountKobo <= 0) {
         throw new Error("amountKobo required for chop-in");
       }
+      if (args.amountKobo < CHOPIN_MIN_CONTRIBUTION_KOBO) {
+        throw new Error("Minimum contribution is ₦100");
+      }
       const newId = await ctx.runMutation(internal.payments.reserveChopInParticipant, {
         sessionId: args.sessionId,
         contributorName: args.contributorName ?? "Anonymous",
@@ -159,25 +162,48 @@ export const initiateCheckout = action({
         payerEmail: args.payerEmail,
       });
       resolvedParticipantId = newId;
-      amountDueKobo = args.amountKobo; // pure contribution, no fee baked in
+      amountDueKobo = args.amountKobo; // pure contribution — stored as amountOwed in the pot
       payerName = args.contributorName ?? "Anonymous";
     }
 
-    // ── Compute platform fee and checkout amount ───────────────────────────
-    // Platform fee = 2% of amountDue, capped at ₦2,000.
-    // checkoutAmount = amountDue + platformFee — what we send to Bachs.
-    // Bachs adds its own processing on top (customer_bears_fee: true).
-    const fees = computeFees(amountDueKobo);
+    // ── Compute fees and checkout amount ─────────────────────────────────
+    let chargeAmountKobo: number;
+    let feeShareKobo = 0;
 
-    // Store platformFeeKobo on the participant row for audit/ledgering
+    if (args.participantId) {
+      // Food / bill — settlement fee grossed up; customer_bears_fee: true means
+      // Bachs adds their 1.5% on top at checkout. We do NOT gross-up ourselves.
+      const allParticipants = await ctx.runQuery(
+        internal.participants.getParticipantsBySessionInternal,
+        { sessionId: args.sessionId }
+      );
+      const participantCount = allParticipants.length;
+      const targetAmountKobo = session.totalAmount;
+      const settlementFeeNaira = calculateSettlementFeeNaira(targetAmountKobo, participantCount);
+      const breakdown = computeParticipantFees(amountDueKobo, targetAmountKobo, settlementFeeNaira);
+      // Send principal + settlement fee; Bachs adds 1.5% on top
+      chargeAmountKobo = breakdown.principalShareKobo + breakdown.feeShareKobo;
+      feeShareKobo     = breakdown.feeShareKobo;
+    } else {
+      // Chop-in — we gross-up ourselves so the pot receives exactly amountDueKobo.
+      // customer_bears_fee: true means Bachs adds their 1.5% on top of finalChargeKobo,
+      // but that's fine — the platform fee already covers our margin; Bachs' cut is
+      // transparent to the contributor (they see the total on the hosted checkout page).
+      const chopIn = computeChopInCharge(amountDueKobo);
+      chargeAmountKobo = chopIn.finalChargeKobo;
+      feeShareKobo     = chopIn.platformFeeKobo;
+    }
+
+    // Store feeShareKobo on the participant row for audit/ledgering
     await ctx.runMutation(internal.payments.internalPatchPlatformFee, {
       participantId: resolvedParticipantId as never,
-      platformFeeKobo: fees.platformFeeKobo,
+      platformFeeKobo: feeShareKobo,
     });
 
-    // ── Convert kobo → NGN string (Bachs uses currency units, not subunits) ──
-    // We send checkoutAmount (share + platform fee); Bachs adds processing on top.
-    const amountStr = (fees.checkoutAmountKobo / 100).toFixed(2);
+    // ── Convert kobo → NGN string (Bachs uses decimal naira) ──────────────
+    // feeShareKobo is always a whole-naira multiple (ceiled in computeParticipantFees)
+    // so chargeAmountKobo is always divisible by 100 — no fractional naira.
+    const amountStr = (chargeAmountKobo / 100).toFixed(2);
 
     // ── Build Bachs request body ────────────────────────────────────────────
     const customer = args.payerEmail
@@ -197,7 +223,8 @@ export const initiateCheckout = action({
         currency: "NGN",
         amount: amountStr,
       },
-      // Bachs adds its 1.5% processing on top; payer sees total on Bachs hosted page
+      // customer_bears_fee: true — Bachs adds their 1.5% on top of our charge amount.
+      // The payer sees the final total (including Bachs fee) on the hosted checkout page.
       customer_bears_fee: true,
       success_url: successUrl,
       cancel_url: args.cancelUrl,

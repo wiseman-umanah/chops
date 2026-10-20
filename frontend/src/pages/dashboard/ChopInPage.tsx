@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
+import { BACHS_WITHDRAWAL_FEE_KOBO, CHOPIN_FEE_THRESHOLD_KOBO } from '@/lib/fees'
 
 const BRAND = '#00C950'
 
@@ -54,11 +55,21 @@ export default function ChopInPage() {
   const totalNaira = parseInt(goalAmount.replace(/\D/g, ''), 10) || 0
   const totalKobo  = totalNaira * 100
 
+  // ₦5,000 threshold — below this, ₦50 transfer fee is charged to organiser
+  const TRANSFER_FEE = BACHS_WITHDRAWAL_FEE_KOBO / 100          // kobo → naira (50)
+  const chargesTransferFee = totalNaira > 0 && totalKobo < CHOPIN_FEE_THRESHOLD_KOBO
+
   // Derived field errors — only visible after first submit attempt
   const titleErr = submitted && !title.trim() ? 'Session title is required' : undefined
-  const goalErr  = submitted && totalNaira <= 0 ? 'Target amount is required' : undefined
+  const goalErr: string | undefined = submitted
+    ? (totalNaira <= 0
+        ? 'Target amount is required'
+        : totalNaira < 1_000
+          ? 'Minimum target amount is ₦1,000'
+          : undefined)
+    : undefined
 
-  const canSubmit = title.trim() && totalNaira > 0
+  const canSubmit = title.trim() && totalNaira >= 1_000
 
   async function handleSubmit() {
     setSubmitted(true)
@@ -68,6 +79,10 @@ export default function ChopInPage() {
       return
     }
     if (totalNaira <= 0) {
+      goalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (totalNaira < 1_000) {
       goalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
@@ -161,9 +176,22 @@ export default function ChopInPage() {
               }}
             />
             <FieldError msg={goalErr} />
-            <p className="text-[12px] text-neutral-400 mt-2">
-              A ₦50 transfer fee is applied when you withdraw funds.
-            </p>
+            {chargesTransferFee && (
+              <p className="text-[12px] text-amber-600 mt-2 flex items-center gap-1">
+                <span>⚠️</span>
+                A ₦50 transfer fee will be deducted from your payout because your target is under ₦5,000.
+              </p>
+            )}
+            {!chargesTransferFee && totalNaira > 0 && (
+              <p className="text-[12px] text-neutral-400 mt-2">
+                No transfer fee — platform covers it for targets ₦5,000 and above.
+              </p>
+            )}
+            {totalNaira === 0 && (
+              <p className="text-[12px] text-neutral-400 mt-2">
+                Minimum target: ₦1,000.
+              </p>
+            )}
           </div>
 
           {error && (
@@ -185,16 +213,16 @@ export default function ChopInPage() {
                 <span>Goal</span>
                 <span>{totalNaira > 0 ? formatNaira(totalNaira) : '—'}</span>
               </div>
-              {totalNaira > 0 && (
+              {chargesTransferFee && (
                 <div className="flex justify-between text-white/70 text-[13px]">
-                  <span>Transfer fee (Bachs)</span>
-                  <span>-₦50</span>
+                  <span>Transfer fee</span>
+                  <span>-{formatNaira(TRANSFER_FEE)}</span>
                 </div>
               )}
               {totalNaira > 0 && (
                 <div className="flex justify-between text-[14px] font-semibold border-t border-white/20 pt-2 mt-1">
                   <span>You receive</span>
-                  <span>{formatNaira(totalNaira - 50)}</span>
+                  <span>{formatNaira(chargesTransferFee ? totalNaira - TRANSFER_FEE : totalNaira)}</span>
                 </div>
               )}
             </div>

@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
-import { computeFees } from '@/lib/fees'
+import { calculateSettlementFeeNaira, computeParticipantFees } from '@/lib/fees'
 
 const BRAND = '#FB2C36'
 
@@ -214,24 +214,26 @@ export default function ChopBillPage() {
   const count      = participants.length
 
   const breakdown = useMemo(() => {
+    const settlementFeeNaira = calculateSettlementFeeNaira(totalKobo, count)
     if (splitType === 'equal') {
       const base = count > 0 ? Math.round(totalKobo / count) : 0
-      const fee = computeFees(base).platformFeeKobo
-      return participants.map(p => ({ name: p.name || '—', base, fee, total: base + fee }))
+      return participants.map(p => ({ name: p.name || '—', base, charge: base }))
     }
     if (splitType === 'percentage') {
       const pctTotal = participants.reduce((s, p) => s + (parseFloat(p.percent) || 0), 0)
       return participants.map(p => {
-        const pct  = parseFloat(p.percent) || 0
-        const base = Math.round(totalKobo * (pct / 100))
-        const fee  = computeFees(base).platformFeeKobo
-        return { name: p.name || '—', base, fee, total: base + fee, pct, pctTotal }
+        const pct    = parseFloat(p.percent) || 0
+        const base   = Math.round(totalKobo * (pct / 100))
+        const fb     = computeParticipantFees(base, totalKobo, settlementFeeNaira)
+        const charge = fb.principalShareKobo + fb.feeShareKobo
+        return { name: p.name || '—', base, charge, pct, pctTotal }
       })
     }
     return participants.map(p => {
-      const base = Math.round((parseFloat(p.customAmount) || 0) * 100)
-      const fee  = computeFees(base).platformFeeKobo
-      return { name: p.name || '—', base, fee, total: base + fee }
+      const base   = Math.round((parseFloat(p.customAmount) || 0) * 100)
+      const fb     = computeParticipantFees(base, totalKobo, settlementFeeNaira)
+      const charge = fb.principalShareKobo + fb.feeShareKobo
+      return { name: p.name || '—', base, charge }
     })
   }, [participants, splitType, totalKobo, count])
 
@@ -481,9 +483,16 @@ export default function ChopBillPage() {
                   <div key={i} className="flex justify-between text-[14px]">
                     <span>{row.name}</span>
                     <div className="text-right">
-                      <span className="font-semibold">{formatNaira(Math.round(row.total / 100))}</span>
-                      {splitType === 'percentage' && 'pct' in row && (
-                        <span className="text-white/60 text-[11px] ml-1.5">({(row as { pct: number }).pct}%)</span>
+                      {splitType === 'equal' ? (
+                        <span className="font-semibold">{formatNaira(Math.round(row.base / 100))}</span>
+                      ) : (
+                        <>
+                          <span className="font-semibold">{formatNaira(Math.round(row.charge / 100))}</span>
+                          <span className="text-white/60 text-[11px] block">
+                            {formatNaira(Math.round(row.base / 100))} + fee
+                            {'pct' in row ? ` · ${(row as { pct: number }).pct}%` : ''}
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
@@ -500,28 +509,33 @@ export default function ChopBillPage() {
                 <span className="font-semibold">Total Bill</span>
                 <span className="font-semibold">{formatNaira(totalNaira)}</span>
               </div>
-              {totalKobo > 0 && count > 0 && (() => {
-                const sampleShare = Math.round(totalKobo / count)
-                const sampleFee   = computeFees(sampleShare).platformFeeKobo
+              {totalKobo > 0 && count > 0 && splitType === 'equal' && (() => {
+                const sampleShare   = Math.round(totalKobo / count)
+                const settlementFee = calculateSettlementFeeNaira(totalKobo, count)
+                const fb            = computeParticipantFees(sampleShare, totalKobo, settlementFee)
+                const chargeKobo    = fb.principalShareKobo + fb.feeShareKobo
                 return (
                   <>
                     <div className="flex justify-between text-white/70 text-[13px]">
-                      <span>+ Service fee per person (est. 2%)</span>
-                      <span>+{formatNaira(sampleFee)}</span>
+                      <span>+ Service fee per person (est.)</span>
+                      <span>+{formatNaira(Math.round(fb.feeShareKobo / 100))}</span>
                     </div>
                     <div className="flex justify-between text-[15px] font-bold mt-1 border-t border-white/20 pt-2">
                       <span>Each person pays</span>
-                      <span>{formatNaira(sampleShare + sampleFee)}</span>
+                      <span>{formatNaira(Math.round(chargeKobo / 100))}</span>
                     </div>
                   </>
                 )
               })()}
-              {!(totalKobo > 0 && count > 0) && (
-                <div className="flex justify-between text-[15px] font-bold mt-1">
-                  <span>Participants</span>
-                  <span>{count}</span>
-                </div>
-              )}
+              {totalKobo > 0 && count > 0 && splitType !== 'equal' && breakdown.length > 0 && (() => {
+                const totalCharged = breakdown.reduce((s, row) => s + row.charge, 0)
+                return (
+                  <div className="flex justify-between text-[15px] font-bold mt-1 border-t border-white/20 pt-2">
+                    <span>Total charged</span>
+                    <span>{formatNaira(Math.round(totalCharged / 100))}</span>
+                  </div>
+                )
+              })()}
             </div>
 
             <button
