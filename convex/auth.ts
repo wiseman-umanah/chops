@@ -109,4 +109,34 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       reset: ResendOTP,
     }),
   ],
+  callbacks: {
+    /**
+     * Account linking: when a user signs up with a password on an email that
+     * already has a Google OAuth account, link the new password credential to
+     * the existing user instead of creating a duplicate.
+     */
+    async createOrUpdateUser(ctx, args) {
+      // If the password account already exists, return its user as-is
+      if (args.existingUserId !== null) return args.existingUserId;
+
+      // For credentials (password) sign-ups only — check for an existing user
+      // with the same email (e.g. signed up via Google OAuth)
+      if (args.type === "credentials" && args.profile.email) {
+        const email = args.profile.email as string;
+        const existing = await ctx.db
+          .query("users")
+          .filter((q) => q.eq(q.field("email"), email))
+          .first();
+        if (existing !== null) return existing._id;
+      }
+
+      // No existing user — create a new one normally
+      return await ctx.db.insert("users", {
+        email: args.profile.email as string,
+        firstName: (args.profile.firstName as string | undefined) ?? "",
+        lastName: (args.profile.lastName as string | undefined) ?? "",
+        phone: (args.profile.phone as string | undefined) ?? "",
+      });
+    },
+  },
 });

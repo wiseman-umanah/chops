@@ -36,7 +36,16 @@ export const getMyProfile = query({
       lastName  = parts.slice(1).join(" ") || undefined;
     }
 
-    return { ...user, firstName, lastName, imageUrl };
+    // Check whether this user already has a password credential linked
+    const passwordAccount = await ctx.db
+      .query("authAccounts")
+      .withIndex("userIdAndProvider", (q) =>
+        q.eq("userId", userId as Id<"users">).eq("provider", "password")
+      )
+      .first();
+    const hasPasswordAccount = passwordAccount !== null;
+
+    return { ...user, firstName, lastName, imageUrl, hasPasswordAccount };
   },
 });
 

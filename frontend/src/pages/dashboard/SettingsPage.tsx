@@ -189,6 +189,7 @@ export default function SettingsPage() {
   const navigate        = useNavigate()
   const generateUploadUrl = useMutation(api.users.generateUploadUrl)
   const updateProfile     = useMutation(api.users.updateProfile)
+  const profile           = useQuery(api.users.getMyProfile)
 
   // ── Profile picture state ──
   const fileInputRef    = useRef<HTMLInputElement>(null)
@@ -456,8 +457,8 @@ export default function SettingsPage() {
         {/* ── Section 4: Referral ── */}
         <ReferralSection />
 
-        {/* ── Section 4: Change password ── */}
-        <motion.div
+        {/* ── Section 4: Change password (password accounts only) ── */}
+        {profile?.hasPasswordAccount && <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25, delay: 0.1 }}
@@ -559,7 +560,7 @@ export default function SettingsPage() {
               </button>
             </form>
           )}
-        </motion.div>
+        </motion.div>}
       </div>
     </>
   )
@@ -742,10 +743,9 @@ function LinkPasswordSection() {
 
   const pwOk = PW_RULES.every(r => r.test(password))
 
-  // Only show for Google-only accounts — detected by absence of firstName
-  // (Google OAuth sets `name` but not `firstName`; password signup always sets firstName)
+  // Only show when no password credential is linked yet
   if (profile === undefined) return null
-  if (profile?.firstName) return null   // already a password account
+  if (profile?.hasPasswordAccount) return null
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
