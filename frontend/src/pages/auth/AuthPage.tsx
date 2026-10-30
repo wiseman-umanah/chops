@@ -192,7 +192,7 @@ function LoginForm() {
     setError('')
     setLoading(true)
     try {
-      await signIn('google', { redirectTo: window.location.origin + '/dashboard' })
+      await signIn('google', { redirectTo: '/dashboard' })
     } catch (err) {
       setError(sanitizeAuthError(err, 'google'))
       setLoading(false)
@@ -335,7 +335,7 @@ function SignupForm({ initialRef }: { initialRef: string }) {
       sessionStorage.setItem('chops_pending_ref', refCode.trim())
     }
     try {
-      await signIn('google', { redirectTo: window.location.origin + '/dashboard' })
+      await signIn('google', { redirectTo: '/dashboard' })
     } catch (err) {
       sessionStorage.removeItem('chops_pending_ref')
       setError(sanitizeAuthError(err, 'google'))
