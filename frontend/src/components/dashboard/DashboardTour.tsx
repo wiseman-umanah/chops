@@ -91,6 +91,10 @@ export default function DashboardTour() {
         zIndex: 9999,
         showProgress: true,
         skipBeacon: true,
+        // v3 hides Skip by default — returning users on a new device need it
+        buttons: ['back', 'close', 'primary', 'skip'],
+        // The ✕ ends the tour instead of advancing to the next step
+        closeButtonAction: 'skip',
       }}
       styles={{
         tooltip: {
